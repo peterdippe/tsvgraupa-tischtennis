@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="utf-8">
+    <title>TSV Graupa Tischtennis | Weiterleitung …</title>
+    <script>
+        (function() {
+            var path = window.location.pathname.replace(/^\/+|\/+$/g, '');
+            var parts = path.split('/');
+            var page = parts[parts.length - 1] || 'home';
+            sessionStorage.setItem('graupa_tt_redirect', page);
+            var basePath = window.location.pathname.slice(0, window.location.pathname.lastIndexOf('/') + 1);
+            window.location.replace(window.location.origin + basePath + '#' + encodeURIComponent(page));
+        })();
+    </script>
+</head>
+<body style="background:#091512; color:#a7c4bc; font-family:sans-serif; text-align:center; padding-top:20vh;">
+    Lade TSV Graupa Tischtennis …
+</body>
+</html>

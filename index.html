@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TSV Graupa · Tischtennis | Spielbetrieb, LivePZ & Turniere</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+
+    <!-- Zentrales Stylesheet -->
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <!-- Zentrale Cloud-Konfiguration -->
+    <script src="js/config.js"></script>
+
+    <!-- MOBILE HEADER -->
+    <div class="mobile-bar">
+        <div style="display:flex; align-items:center; gap:10px; cursor:pointer;" onclick="switchPage('home')">
+            <div class="cybershape-badge" style="width:36px; height:36px; font-size:18px;">🏓</div>
+            <strong class="font-display" style="font-size:16.5px;">TSV Graupa · Tischtennis</strong>
+        </div>
+        <div style="display:flex; gap:6px;">
+            <button class="btn btn-dark" style="padding:7px 11px; font-size:12.5px; border:1px solid var(--border-green);" onclick="shareCurrentPage()" title="Direktlink zu dieser Seite teilen">🔗</button>
+            <button class="btn btn-sand" style="padding:7px 13px; font-size:13px;" onclick="toggleSidebar()">Menü ☰</button>
+        </div>
+    </div>
+
+    <!-- SEITENLEISTE (DIREKTE HAUPTNAVIGATION OHNE UNTERMENÜS) -->
+    <aside id="sidebar" class="sidebar">
+        <div>
+            <div class="brand-box" style="cursor:pointer;" onclick="switchPage('home')">
+                <div class="cybershape-badge" style="width:46px; height:46px; font-size:22px; flex-shrink:0;">🏓</div>
+                <div>
+                    <div class="brand-title">TSV Graupa</div>
+                    <div class="brand-sub">🏓 Abt. Tischtennis · Live-Hub</div>
+                </div>
+            </div>
+
+            <nav class="nav-list">
+                <button onclick="switchPage('home')" id="nav-home" class="nav-btn active">
+                    <span>🏠 Home & Abteilung</span>
+                </button>
+                <button onclick="switchPage('spielbetrieb')" id="nav-spielbetrieb" class="nav-btn">
+                    <span>🏓 Spielbetrieb</span>
+                </button>
+                <button onclick="switchPage('tt-ranking')" id="nav-tt-ranking" class="nav-btn">
+                    <span>📈 TT-Ranking & Challenge</span>
+                </button>
+                <button onclick="switchPage('tt-news')" id="nav-tt-news" class="nav-btn">
+                    <span>📰 TT-News & Videos</span>
+                </button>
+                <button onclick="switchPage('turnierplaner')" id="nav-turnierplaner" class="nav-btn">
+                    <span>🏆 Turnierplaner</span>
+                </button>
+                <button onclick="switchPage('zaehlboard')" id="nav-zaehlboard" class="nav-btn">
+                    <span>🔢 Digitales Zählboard</span>
+                </button>
+
+                <div style="margin:10px 0 6px; border-top:1px solid rgba(52, 211, 153, 0.16);"></div>
+
+                <button onclick="switchPage('impressum')" id="nav-impressum" class="nav-btn">
+                    <span>⚖️ Impressum & Rechtliches</span>
+                </button>
+            </nav>
+        </div>
+
+        <div class="sidebar-footer">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-weight:700; color:#34d399;">● tsvgraupa-tischtennis.de</span>
+                <button onclick="shareCurrentPage()" style="background:rgba(52,211,153,0.15); border:1px solid rgba(52,211,153,0.35); color:#34d399; border-radius:8px; padding:3px 8px; font-size:11px; font-weight:700; cursor:pointer;" title="Direktlink zur aktuellen Ansicht kopieren">🔗 Link</button>
+            </div>
+            <div style="color:var(--text-muted); margin-top:4px;">TSV Graupa e.V. · Turnhalle Badstr. 3</div>
+        </div>
+    </aside>
+
+    <!-- DYNAMISCHER HAUPTBEREICH -->
+    <main id="app-main" class="main-content"></main>
+
+    <!-- Globales, maskiertes Passwort-Modal (für Admin-Modus in Challenge & Turnierplaner) -->
+    <div class="modal-overlay" id="pwd-modal" onclick="if(event.target===this) closePasswordModal(null)">
+        <div class="modal-box" style="max-width:400px; text-align:center;">
+            <div style="font-size:36px; margin-bottom:6px;">🔐</div>
+            <h3 id="pwd-modal-title" style="font-size:21px; font-weight:800; margin-bottom:6px;">Admin-Passwort</h3>
+            <p id="pwd-modal-sub" style="font-size:13.5px; color:#475569; margin-bottom:14px;">Bitte gib das Passwort ein (Eingabe erfolgt verdeckt):</p>
+            <form onsubmit="submitPasswordModal(event)" style="display:flex; flex-direction:column; gap:10px;">
+                <input type="password" id="pwd-modal-input" class="form-input" placeholder="••••••••" autocomplete="current-password"
+                       style="text-align:center; font-size:18px; letter-spacing:0.18em; font-weight:800; padding:11px;">
+                <div style="display:flex; gap:8px; justify-content:center; margin-top:4px;">
+                    <button type="submit" class="btn btn-emerald" style="flex:1;">🔓 Entsperren</button>
+                    <button type="button" class="btn btn-dark" onclick="closePasswordModal(null)">Abbrechen</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ===================================================================
+         SCHLANKE JAVASCRIPT-EINBINDUNG (NUR TISCHTENNIS-MODULE)
+         =================================================================== -->
+    <script src="js/core.js"></script>
+    <script src="js/tischtennis.js"></script>
+    <script src="js/tt-news.js"></script>
+    <script src="js/tt-ranking.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+    <script src="js/turnierplaner.js"></script>
+    <script src="js/zaehlboard.js"></script>
+</body>
+</html>
