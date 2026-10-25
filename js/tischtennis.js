@@ -6,21 +6,25 @@ const TTLIVE_BASE = 'https://dresden.tischtennislive.de/';
 const CLICKTT_BASE = 'https://www.mytischtennis.de';
 const TTLIVE_OVERVIEW_URL = 'https://dresden.tischtennislive.de/?L1=Public&L2=Verein&L2P=870&Page=Spielbetrieb&Sportart=96&Page2=Tabellen&Saison=2026';
 
-let ttCurrentSaison = '2026';
+let ttActiveSaison = localStorage.getItem('dippe_tt_active_saison') || '2026';
+let ttCurrentSaison = ttActiveSaison;
+let ttMetaCache = null;
 let ttTeamsList = [];
 let ttTeamDetailsCache = {};
 let activeGraupaTeamId = null;
-let inspectedSubTeam = null; // { teamKey, teamName, teamUrl, isOwnGraupaTeam, sourcePortal }
+let inspectedSubTeam = null;
 let ttHubInitialized = false;
 let ttPreloadGen = 0;
 
-function initTTSaisonSelect() {
+function initTTSaisonSelect(maxYearParam) {
     const sel = document.getElementById('tt-saison-select');
-    if (!sel || sel.children.length > 0) return;
+    if (!sel) return;
+    const maxY = Math.max(2026, Number(maxYearParam || ttActiveSaison || 2026));
+    const curVal = Number(ttCurrentSaison || maxY);
     const years = [];
-    for (let y = 2026; y >= 2009; y--) {
+    for (let y = maxY; y >= 2009; y--) {
         const nextShort = String(y + 1).slice(-2);
-        years.push(`<option value="${y}"${y === 2026 ? ' selected' : ''}>${y}/${nextShort}</option>`);
+        years.push(`<option value="${y}"${y === curVal ? ' selected' : ''}>${y}/${nextShort}</option>`);
     }
     sel.innerHTML = years.join('');
 }
@@ -1571,4 +1575,167 @@ function renderGraupaTeamLayout(team, details, isLoadingDetails) {
 
 window.addEventListener('DOMContentLoaded', () => {
     initTTHubIfNeeded();
+});
+
+// ===================================================================
+// ZENTRALE SAISON-STEUERUNG (1-KLICK-SAISONWECHSEL IM BROWSER)
+// ===================================================================
+async function syncActiveSeasonFromBackend() {
+    const cloudUrl = (CONFIG.pinnwandCloudUrl || '').trim();
+    if (!cloudUrl || !cloudUrl.startsWith('https://script.google.com/')) return;
+    try {
+        const res = await fetch(`${cloudUrl}?kind=tt_meta&t=${Date.now()}`, { redirect: 'follow' });
+        if (!res.ok) return;
+        const j = await res.json();
+        if (j && j.ok && j.meta && j.meta.activeSaison) {
+            const serverActive = String(j.meta.activeSaison);
+            const prevActive = ttActiveSaison;
+            ttActiveSaison = serverActive;
+            ttMetaCache = j.meta;
+            try { localStorage.setItem('dippe_tt_active_saison', serverActive); } catch (e) {}
+            initTTSaisonSelect(serverActive);
+            if (prevActive !== serverActive && ttCurrentSaison === prevActive) {
+                changeTTSaison(serverActive);
+            }
+        }
+    } catch (e) {}
+}
+
+async function openTTSeasonAdminModal() {
+    const panel = document.getElementById('tt-season-admin-panel');
+    if (!panel) return;
+    if (!panel.classList.contains('hidden')) {
+        panel.classList.add('hidden');
+        return;
+    }
+    let pwd = sessionStorage.getItem('dippe_admin_pwd');
+    if (!pwd) {
+        pwd = (typeof askPasswordModal === 'function')
+            ? await askPasswordModal('⚙️ Saison-Admin', 'Bitte Admin-Passwort eingeben:')
+            : prompt('Bitte Admin-Passwort eingeben:');
+        if (!pwd) return;
+        const cloudUrl = (CONFIG.pinnwandCloudUrl || '').trim();
+        try {
+            const r = await fetch(`${cloudUrl}?kind=auth&type=admin&password=${encodeURIComponent(pwd)}`);
+            const j = await r.json();
+            if (!j || !j.ok) { alert('Falsches Admin-Passwort!'); return; }
+            sessionStorage.setItem('dippe_admin_pwd', pwd);
+        } catch (e) {
+            alert('Verbindungsfehler bei der Passwortprüfung.');
+            return;
+        }
+    }
+
+    await syncActiveSeasonFromBackend();
+    document.getElementById('tt-admin-new-saison').value = ttActiveSaison;
+    const ctList = (ttMetaCache && ttMetaCache.clickTTLeagues && ttMetaCache.clickTTLeagues[ttCurrentSaison]) || [];
+    const firstCt = ctList[0] || {};
+    document.getElementById('tt-admin-ct-tabname').value  = firstCt.tabName || '1. Damen';
+    document.getElementById('tt-admin-ct-league').value   = firstCt.league || 'DTTB Oberliga Mitte Damen';
+    document.getElementById('tt-admin-ct-tabelle').value  = firstCt.tabelleUrl || '';
+    document.getElementById('tt-admin-ct-bilanzen').value = firstCt.bilanzenUrl || '';
+
+    panel.classList.remove('hidden');
+}
+
+async function ttAdminSaveActiveSeason() {
+    const pwd = sessionStorage.getItem('dippe_admin_pwd');
+    const newS = String(document.getElementById('tt-admin-new-saison')?.value || '').trim();
+    const freezePrev = Boolean(document.getElementById('tt-admin-freeze-prev')?.checked);
+    if (!newS || !/^\d{4}$/.test(newS)) {
+        alert('Bitte eine vierstellige Jahreszahl eingeben (z. B. 2027).');
+        return;
+    }
+    if (!confirm(`Saisonwechsel wirklich durchführen?\n\n• Neue aktive Hauptsaison: ${newS}/${String(+newS + 1).slice(-2)}\n• Alle Saisons vor ${newS} werden als abgeschlossenes Archiv behandelt.`)) {
+        return;
+    }
+
+    const cloudUrl = (CONFIG.pinnwandCloudUrl || '').trim();
+    try {
+        const res = await fetch(cloudUrl, {
+            method: 'POST', redirect: 'follow',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({
+                kind: 'tt_meta_action',
+                action: 'set_active_season',
+                password: pwd,
+                newSaison: newS,
+                freezePrevious: freezePrev
+            })
+        });
+        const j = await res.json();
+        if (j && j.ok && j.meta) {
+            ttMetaCache = j.meta;
+            ttActiveSaison = String(j.meta.activeSaison);
+            localStorage.setItem('dippe_tt_active_saison', ttActiveSaison);
+            initTTSaisonSelect(ttActiveSaison);
+            document.getElementById('tt-season-admin-panel')?.classList.add('hidden');
+            changeTTSaison(ttActiveSaison);
+            if (typeof showQuickToast === 'function') {
+                showQuickToast(`✅ Aktive Saison auf ${ttActiveSaison}/${String(+ttActiveSaison + 1).slice(-2)} umgestellt!`);
+            }
+        } else {
+            alert(j?.error || 'Fehler beim Speichern.');
+        }
+    } catch (e) {
+        alert('Netzwerkfehler beim Saisonwechsel.');
+    }
+}
+
+async function ttAdminSaveClickTTTeam(clearAll) {
+    const pwd = sessionStorage.getItem('dippe_admin_pwd');
+    const targetS = String(document.getElementById('tt-admin-new-saison')?.value || ttCurrentSaison).trim();
+    let leagues = [];
+
+    if (!clearAll) {
+        const tabName = (document.getElementById('tt-admin-ct-tabname')?.value || '1. Damen').trim();
+        const league  = (document.getElementById('tt-admin-ct-league')?.value || 'DTTB Oberliga').trim();
+        const tabUrl  = (document.getElementById('tt-admin-ct-tabelle')?.value || '').trim();
+        const bilUrl  = (document.getElementById('tt-admin-ct-bilanzen')?.value || '').trim();
+        if (!tabUrl || !bilUrl) {
+            alert('Bitte sowohl die Tabellen-URL als auch die Spielerbilanzen-URL aus click-TT eintragen.');
+            return;
+        }
+        const infosUrl = bilUrl.replace(/\/spielerbilanzen(\/gesamt)?.*$/i, '/infos');
+        const keySlug = 'team_clicktt_' + targetS + '_' + tabName.toLowerCase().replace(/[^a-z0-9]/g, '');
+        leagues = [{
+            id: keySlug,
+            teamKey: keySlug,
+            tabName: tabName,
+            fullTeamName: 'TSV Graupa',
+            league: league,
+            tabelleUrl: tabUrl,
+            bilanzenUrl: bilUrl,
+            infosUrl: infosUrl
+        }];
+    }
+
+    const cloudUrl = (CONFIG.pinnwandCloudUrl || '').trim();
+    try {
+        const res = await fetch(cloudUrl, {
+            method: 'POST', redirect: 'follow',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({
+                kind: 'tt_meta_action',
+                action: 'save_clicktt_leagues',
+                password: pwd,
+                saison: targetS,
+                leagues: leagues
+            })
+        });
+        const j = await res.json();
+        if (j && j.ok && j.meta) {
+            ttMetaCache = j.meta;
+            loadAllGraupaTeamsFromTTLive(true);
+            if (typeof showQuickToast === 'function') {
+                showQuickToast(clearAll ? '🗑️ click-TT-Zuordnung entfernt' : '✅ click-TT-Team gespeichert!');
+            }
+        }
+    } catch (e) {
+        alert('Fehler beim Speichern der click-TT-Daten.');
+    }
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+    syncActiveSeasonFromBackend();
 });
