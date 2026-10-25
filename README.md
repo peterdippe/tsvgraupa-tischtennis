@@ -53,7 +53,7 @@ Die Plattform arbeitet als schnelle Single-Page-Application (SPA) ohne eigenen k
     ├── zaehlboard.html      # Digitales Zählboard
     └── impressum.html       # Impressum (§ 5 DDG), Gewährleistungs-Disclaimer & DSGVO
 
-📅 Anleitung: Saisonwechsel im Sommer (1-Klick-Automatik ohne Code-Änderung)
+## 3. 📅 Anleitung: Saisonwechsel im Sommer (1-Klick-Automatik ohne Code-Änderung)
 Sobald im Sommer (meist Juli/August) die neuen Staffeln für die kommende Punktspielsaison in TischtennisLive (und ggf. click-TT) veröffentlicht sind, wird der Saisonwechsel direkt im Browser durchgeführt. Es muss keine Code-Datei angefasst werden.
 
 Schritt 1: Alte Saison abschließen & neue Saison aktivieren
