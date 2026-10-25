@@ -1,10 +1,10 @@
 <!-- ===============================================================
-     SPIELBETRIEB: MANNSCHAFTEN, LIGA-TABELLEN & GEGNER-INSPEKTOR
+     SPIELBETRIEB: MANNSCHAFTEN, LIGA-TABELLEN & SAISON-ADMIN
      =============================================================== -->
 <section id="page-spielbetrieb" class="page-section">
     <div class="section-header">
         <div>
-            <span class="eyebrow">TSV Graupa e.V. · Punktspielbetrieb · Alle Ligen, Bilanzen & Spielpläne</span>
+            <span class="eyebrow">TSV Graupa e.V. · Punktspielbetrieb · Alle Ligen, Bilanzen &amp; Spielpläne</span>
             <h2 style="font-size:32px; font-weight:800;">🏓 Spielbetrieb</h2>
         </div>
     </div>
@@ -12,7 +12,7 @@
     <div class="sand-card">
         <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px;">
             <div>
-                <span id="tt-saison-eyebrow" class="eyebrow-dark">Saison 2026/27 · Punktspielbetrieb · Klicke in der Tabelle auf beliebige Vereine für deren Details</span>
+                <span id="tt-saison-eyebrow" class="eyebrow-dark">Punktspielbetrieb · Klicke in der Tabelle auf beliebige Vereine für deren Details</span>
                 <h3 style="font-size:23px; font-weight:800;">🏅 Mannschaften des TSV Graupa</h3>
             </div>
             <div style="display:flex; flex-wrap:wrap; align-items:center; gap:8px;">
@@ -24,6 +24,62 @@
                 <a id="tt-team-direct-link" href="https://dresden.tischtennislive.de/?L1=Public&L2=Verein&L2P=870&Page=Spielbetrieb&Sportart=96&Page2=Tabellen&Saison=2026" target="_blank" rel="noopener" class="btn btn-dark" style="padding:7px 12px; font-size:12px;">
                     Original in TTLive ↗
                 </a>
+                <button class="btn btn-amber" style="padding:7px 11px; font-size:12px;" onclick="openTTSeasonAdminModal()" title="Saison abschließen / Neue Saison freischalten">
+                    ⚙️ Saison-Admin
+                </button>
+            </div>
+        </div>
+
+        <!-- AUSKLAPPBARES SAISON-ADMIN-PANEL (PASSWORTGESCHÜTZT) -->
+        <div id="tt-season-admin-panel" class="hidden" style="background:linear-gradient(135deg,#0f2922,#14352b); border:1.5px solid #fbbf24; border-radius:16px; padding:16px 20px; margin:12px 0 16px; color:#fff;">
+            <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:10px; margin-bottom:12px;">
+                <div>
+                    <span style="font-size:11px; font-weight:800; color:#fbbf24; text-transform:uppercase; letter-spacing:0.06em;">🔐 Abteilungsleiter-Werkzeug · Zentrale Saison-Steuerung</span>
+                    <h4 style="font-size:18px; font-weight:800; margin:2px 0 0;">Saison abschließen &amp; Saisonwechsel durchführen</h4>
+                </div>
+                <button class="btn btn-dark" style="padding:5px 10px; font-size:12px;" onclick="document.getElementById('tt-season-admin-panel').classList.add('hidden')">✕ Schließen</button>
+            </div>
+
+            <div class="grid-2" style="gap:16px;">
+                <!-- Kasten 1: Aktives Spieljahr umschalten -->
+                <div style="background:rgba(0,0,0,0.3); border:1px solid rgba(52,211,153,0.3); border-radius:12px; padding:14px;">
+                    <div style="font-weight:800; font-size:14px; color:#34d399; margin-bottom:6px;">1. Aktive Hauptsaison festlegen</div>
+                    <p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin:0 0 10px;">
+                        Alle Saisons <b>vor</b> der aktiven Hauptsaison gelten automatisch als abgeschlossen (100% schneller Google-Drive-Archiv-Modus). Die aktive Saison wird bei jedem Besuch live mit TTLive &amp; click-TT abgeglichen.
+                    </p>
+                    <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+                        <label style="font-size:12.5px; font-weight:700;">Aktives Spieljahr (Startjahr):</label>
+                        <input type="number" id="tt-admin-new-saison" class="form-input" style="width:95px; padding:6px 10px; font-weight:800; text-align:center;" min="2020" max="2045" value="2026">
+                        <label style="font-size:12px; display:inline-flex; align-items:center; gap:5px; cursor:pointer;">
+                            <input type="checkbox" id="tt-admin-freeze-prev" checked> Vorherige Saison vorher final in Drive sichern
+                        </label>
+                    </div>
+                    <button class="btn btn-emerald" style="margin-top:10px; width:100%; justify-content:center;" onclick="ttAdminSaveActiveSeason()">
+                        🚀 Saisonwechsel jetzt speichern &amp; aktivieren
+                    </button>
+                </div>
+
+                <!-- Kasten 2: Überregionale click-TT-Teams (Oberliga / Regionalliga) -->
+                <div style="background:rgba(0,0,0,0.3); border:1px solid rgba(52,211,153,0.3); border-radius:12px; padding:14px;">
+                    <div style="font-weight:800; font-size:14px; color:#fbbf24; margin-bottom:6px;">2. Überregionale click-TT-Mannschaft (Oberliga / Regionalliga)</div>
+                    <p style="font-size:12px; color:#cbd5e1; line-height:1.5; margin:0 0 8px;">
+                        Falls in der gewählten Saison eine Mannschaft (z. B. <code>1. Damen</code>) überregional in click-TT spielt, trage hier den Link zur Liga-Tabelle (<code>.../tabelle/gesamt</code>) und zu den Spielerbilanzen (<code>.../spielerbilanzen/gesamt</code>) ein:
+                    </p>
+                    <div style="display:flex; flex-direction:column; gap:6px;">
+                        <input type="text" id="tt-admin-ct-tabname" class="form-input" placeholder="Reiter-Name (z. B. 1. Damen)" style="padding:6px 10px; font-size:12px;">
+                        <input type="text" id="tt-admin-ct-league" class="form-input" placeholder="Liga-Name (z. B. DTTB Oberliga Mitte Damen)" style="padding:6px 10px; font-size:12px;">
+                        <input type="url" id="tt-admin-ct-tabelle" class="form-input" placeholder="click-TT Liga-Tabelle URL (.../tabelle/gesamt)" style="padding:6px 10px; font-size:12px;">
+                        <input type="url" id="tt-admin-ct-bilanzen" class="form-input" placeholder="click-TT Mannschafts-Bilanzen URL (.../spielerbilanzen/gesamt)" style="padding:6px 10px; font-size:12px;">
+                    </div>
+                    <div style="display:flex; gap:8px; margin-top:8px;">
+                        <button class="btn btn-amber" style="flex:1; justify-content:center; font-size:12px;" onclick="ttAdminSaveClickTTTeam(false)">
+                            💾 click-TT-Team speichern
+                        </button>
+                        <button class="btn btn-dark" style="font-size:12px;" onclick="ttAdminSaveClickTTTeam(true)" title="Kein click-TT-Team in dieser Saison">
+                            🗑️ Leeren
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
 
