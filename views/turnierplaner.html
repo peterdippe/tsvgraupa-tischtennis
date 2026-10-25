@@ -1,0 +1,108 @@
+<section id="page-turnierplaner" class="page-section">
+    <div class="section-header">
+        <div>
+            <span class="eyebrow">Sport-Ecke · Tischtennis</span>
+            <h2 style="font-size:32px; font-weight:800;">🏆 Turnierplaner</h2>
+        </div>
+        <div style="display:flex; flex-wrap:wrap; gap:8px;">
+            <button class="btn btn-sand" onclick="switchPage('tischtennis')">🏓 Tischtennis</button>
+            <button class="btn btn-sand" onclick="switchPage('zaehlboard')">🔢 Digitales Zählboard</button>
+            <button class="btn btn-emerald" onclick="switchPage('turnierplaner')">🏆 Turnierplaner</button>
+            <button class="btn btn-sand" onclick="switchPage('radfahren')">🚴 Fahrradfahren</button>
+            <button class="btn btn-sand" onclick="switchPage('wandern')">🥾 Wanderungen</button>
+        </div>
+    </div>
+
+    <div class="tp-wrap">
+        <div class="tp-toolbar">
+            <button id="tp-btn-new" class="btn btn-emerald hidden" onclick="tpNewTournament()">➕ Neues Turnier anlegen</button>
+            <button id="tp-btn-save" class="btn btn-emerald hidden" onclick="tpSaveToCloudAndLocal()">💾 Speichern & in Drive</button>
+            <button class="btn btn-sand" onclick="tpOpenLoad()">📂 Turnier laden</button>
+            <button id="tp-btn-excel" class="btn btn-dark" onclick="tpExportExcel()">📊 Excel-Export</button>
+            <button id="tp-admin-lock-btn" class="btn btn-amber" style="margin-left:auto;" onclick="tpToggleAdminMode()">🔒 Admin-Modus entsperren</button>
+            <span id="tp-save-hint" class="tp-help">Nur-Lese-Modus (Gast)</span>
+        </div>
+
+        <div id="tp-meta-panel" class="tp-panel" style="display:none;">
+            <h3>📋 Turnier-Metadaten</h3>
+            <div class="tp-grid">
+                <div class="tp-field"><label>Name des Turniers</label><input id="tp-m-name" type="text" placeholder="z.B. Vereinsmeisterschaft 2026"></div>
+                <div class="tp-field"><label>Datum</label><input id="tp-m-date" type="date"></div>
+                <div class="tp-field"><label>Turnierleitung</label><input id="tp-m-leader" type="text" placeholder="Name"></div>
+                <div class="tp-field"><label>Anzahl Spieler (automatisch)</label><input id="tp-m-count" type="number" min="2" value="8" readonly style="background:#eef2f0;color:#64748b;" title="Wird automatisch aus der Spielerliste berechnet"></div>
+                <div class="tp-field"><label>Gewinnsätze</label><input id="tp-m-winsets" type="number" min="1" value="3"></div>
+                <div class="tp-field"><label>Gewinnpunkte / Satz</label><input id="tp-m-winpts" type="number" min="1" value="11"></div>
+            </div>
+
+            <h4 style="margin-top:18px;">👥 Spieler-Liste</h4>
+            <p class="tp-help">Spalten sind sortierbar (Klick auf Überschrift) – v.a. nach LPZ. „Spieler starten" nutzt die aktuelle Sortierung als Setzliste.</p>
+            <div style="overflow-x:auto;">
+                <table class="tp-table" id="tp-player-table">
+                    <thead>
+                        <tr>
+                            <th data-sort="nr">#<span class="sort-ind"></span></th>
+                            <th data-sort="name">Name<span class="sort-ind"></span></th>
+                            <th data-sort="vorname">Vorname<span class="sort-ind"></span></th>
+                            <th data-sort="lpz">LPZ<span class="sort-ind"></span></th>
+                            <th data-sort="geschlecht">Geschl.<span class="sort-ind"></span></th>
+                            <th data-sort="verein">Verein<span class="sort-ind"></span></th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="tp-player-tbody"></tbody>
+                </table>
+            </div>
+            <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
+                <button class="btn btn-sand" onclick="tpAddPlayerRow()">➕ Spieler hinzufügen</button>
+            </div>
+
+            <h4 style="margin-top:20px;">🎯 Modus Herren-/Gemischt-Einzel</h4>
+            <div id="tp-mode-single"></div>
+
+            <h4 style="margin-top:20px;">👯 Doppel</h4>
+            <label style="font-size:13px;"><input type="checkbox" id="tp-dbl-enable" onchange="tpToggleDbl()"> Doppel-Wettbewerb spielen</label>
+            <div id="tp-dbl-config" style="display:none;"></div>
+
+            <h4 style="margin-top:20px;">🚺 Zusätzliche Damen-Runde</h4>
+            <label style="font-size:13px;"><input type="checkbox" id="tp-women-enable" onchange="tpToggleWomen()"> Separate Damen-Einzel-Runde spielen</label>
+            <div id="tp-women-config" style="display:none;"></div>
+
+            <div style="margin-top:22px; display:flex; gap:8px; flex-wrap:wrap;">
+                <button class="btn btn-emerald" style="font-size:15px; padding:12px 22px;" onclick="tpStartTournament()">🚀 Turnier starten</button>
+            </div>
+        </div>
+
+        <div id="tp-live" style="display:none;">
+            <div class="tp-panel">
+                <h3 id="tp-live-title">Turnier</h3>
+                <div id="tp-progress-overview"></div>
+            </div>
+            <div class="tp-panel">
+                <h3>▶️ Laufende Spiele</h3>
+                <div id="tp-running-list" class="tp-running-list"><p class="tp-help">Keine laufenden Spiele.</p></div>
+            </div>
+            <div class="tp-panel">
+                <div class="tp-tabs" id="tp-comp-tabs"></div>
+                <div id="tp-comp-body"></div>
+            </div>
+        </div>
+
+        <div id="tp-empty" class="tp-panel" style="text-align:center;">
+            <h3>Noch kein Turnier</h3>
+            <p class="tp-help">Lade über „📂 Turnier laden“ ein bestehendes Turnier oder entsperre rechts oben den Admin-Modus, um ein neues Turnier anzulegen.</p>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="tp-match-modal" onclick="if(event.target===this) tpCloseMatch()">
+        <div class="modal-box" id="tp-match-modal-body"></div>
+    </div>
+    <div class="modal-overlay" id="tp-load-modal" onclick="if(event.target===this) tpCloseLoad()">
+        <div class="modal-box">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+                <h3>📂 Gespeichertes Turnier laden</h3>
+                <button class="modal-x" onclick="tpCloseLoad()">×</button>
+            </div>
+            <div id="tp-load-list" style="margin-top:10px;"></div>
+        </div>
+    </div>
+</section>

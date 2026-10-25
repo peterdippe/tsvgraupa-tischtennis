@@ -1,0 +1,79 @@
+<!-- ===============================================================
+     SPORT-ECKE: TT-NEWS (SZENE-TICKER, YOUTUBE-STREAM & VEREINS-INFO)
+     =============================================================== -->
+<section id="page-tt-news" class="page-section">
+    <div class="section-header">
+        <div>
+            <span class="eyebrow">Sport-Ecke · Tischtennis-Szene, WTT-Highlights & Vereins-Links</span>
+            <h2 style="font-size:32px; font-weight:800;">📰 TT-News</h2>
+        </div>
+        <div style="display:flex; flex-wrap:wrap; gap:8px;"></div>
+    </div>
+
+    <!-- VEREINS-BANNER TSV GRAUPA -->
+    <div class="hero-card" style="padding:22px 26px; margin-bottom:20px; background:linear-gradient(145deg, rgba(9,21,18,0.96), rgba(5,150,105,0.28));">
+        <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:16px;">
+            <div style="display:flex; align-items:center; gap:14px; flex:1; min-width:260px;">
+                <div class="cybershape-badge" style="width:52px; height:52px; font-size:24px; flex-shrink:0;">🏓</div>
+                <div>
+                    <span class="eyebrow" style="margin:0;">Abteilung Tischtennis · TSV Graupa e.V.</span>
+                    <h3 style="font-size:22px; font-weight:800; color:#fff; margin:2px 0 4px;">Rund 100 Mitglieder & 12 Mannschaften im Punktspielbetrieb</h3>
+                    <p style="font-size:13.2px; color:var(--text-muted); line-height:1.5; margin:0;">
+                        Von der Landesklasse bis zum Nachwuchs – Heimspiele in der Turnhalle Grundschule Graupa (Badstr. 3).
+                    </p>
+                </div>
+            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:8px;">
+                <button class="btn btn-emerald" onclick="switchPage('tischtennis')">
+                    🏅 Zu den Mannschaften & Tabellen →
+                </button>
+                <a href="https://www.tsv-graupa.de/index.php?s=Tischtennis&c=TT_Start" target="_blank" rel="noopener" class="btn btn-amber">
+                    🏠 Offizielle TSV-Graupa TT-Seite ↗
+                </a>
+                <a href="https://dresden.tischtennislive.de/?L1=Public&L2=Verein&L2P=870&Page=Spielbetrieb&Sportart=96&Page2=Tabellen&Saison=2026" target="_blank" rel="noopener" class="btn btn-dark" style="border:1px solid var(--border-green);">
+                    📊 TischtennisLive (Verein 870) ↗
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- ZWEISPALTIGES NEWS- & VIDEO-BOARD -->
+    <div class="grid-2" style="gap:20px; align-items:stretch;">
+        <!-- 1. Aktueller Tischtennis-Newsfeed -->
+        <div class="tt-feed-card" style="padding:22px;">
+            <div>
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:6px;">
+                    <span class="eyebrow">📰 Szene-Ticker & Portale</span>
+                    <button class="btn btn-sand" style="padding:5px 11px; font-size:11.5px;" onclick="loadTTNewsFeed(true)">🔄 Live-Update</button>
+                </div>
+                <h3 style="font-size:21px; font-weight:800; color:#fff; margin-bottom:10px;">Aktuelle Tischtennis-Schlagzeilen</h3>
+                <div id="tt-news-container" class="tt-news-list" style="max-height:480px;"></div>
+            </div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.1);">
+                <a href="https://www.mytischtennis.de/public/home/" target="_blank" rel="noopener" class="badge" style="text-decoration:none; padding:6px 10px;">myTischtennis.de ↗</a>
+                <a href="https://www.tt-news.de/" target="_blank" rel="noopener" class="badge" style="text-decoration:none; padding:6px 10px;">TT-News.de ↗</a>
+                <a href="https://tt-spin.de/" target="_blank" rel="noopener" class="badge" style="text-decoration:none; padding:6px 10px;">TT-Spin.de ↗</a>
+                <a href="https://worldtabletennis.com/" target="_blank" rel="noopener" class="badge" style="text-decoration:none; padding:6px 10px;">WTT World Tour ↗</a>
+                <a href="https://www.tischtennis.de/" target="_blank" rel="noopener" class="badge" style="text-decoration:none; padding:6px 10px;">DTTB ↗</a>
+            </div>
+        </div>
+
+        <!-- 2. Trending YouTube-Videos -->
+        <div class="tt-feed-card" style="padding:22px;">
+            <div>
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:6px;">
+                    <span class="eyebrow">🔥 YouTube · Highlights & Rallies</span>
+                    <span class="badge" style="background:rgba(239,68,68,0.2); color:#fca5a5;">▶ Video-Stream</span>
+                </div>
+                <h3 style="font-size:21px; font-weight:800; color:#fff; margin-bottom:10px;">Trending Tischtennis-Videos</h3>
+                <div id="tt-yt-container" class="tt-yt-grid" style="max-height:480px;"></div>
+            </div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.1);">
+                <a href="https://www.youtube.com/@WTTGlobal/videos" target="_blank" rel="noopener" class="badge" style="text-decoration:none; padding:6px 10px;">▶ WTT Global ↗</a>
+                <a href="https://www.youtube.com/@TableTennisDaily/videos" target="_blank" rel="noopener" class="badge" style="text-decoration:none; padding:6px 10px;">▶ TableTennisDaily ↗</a>
+                <a href="https://www.youtube.com/@tischtennisdeutschland/videos" target="_blank" rel="noopener" class="badge" style="text-decoration:none; padding:6px 10px;">▶ TT-Deutschland ↗</a>
+                <a href="https://www.youtube.com/@AdamBobrow/videos" target="_blank" rel="noopener" class="badge" style="text-decoration:none; padding:6px 10px;">▶ Adam Bobrow ↗</a>
+            </div>
+        </div>
+    </div>
+</section>

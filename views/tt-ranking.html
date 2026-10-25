@@ -1,0 +1,329 @@
+<!-- ===============================================================
+     SPORT-ECKE: TT-RANKING, TRAININGS-CHALLENGE & 9 ANALYSE-CHARTS
+     =============================================================== -->
+<section id="page-tt-ranking" class="page-section">
+    <div class="section-header">
+        <div>
+            <span class="eyebrow">Sport-Ecke · Trainings-Challenge, LivePZ-Rangliste & Spiel-Analyse</span>
+            <h2 style="font-size:32px; font-weight:800;">📈 TT-Ranking</h2>
+        </div>
+        <div style="display:flex; flex-wrap:wrap; gap:8px;">
+            <button class="btn btn-sand" onclick="switchPage('tischtennis')">🏓 Tischtennis</button>
+            <button class="btn btn-emerald" onclick="switchPage('tt-ranking')">📈 TT-Ranking</button>
+            <button class="btn btn-sand" onclick="switchPage('turnierplaner')">🏆 Turnierplaner</button>
+            <button class="btn btn-sand" onclick="switchPage('zaehlboard')">🔢 Digitales Zählboard</button>
+            <button class="btn btn-sand" onclick="switchPage('radfahren')">🚴 Fahrradfahren</button>
+            <button class="btn btn-sand" onclick="switchPage('wandern')">🥾 Wanderungen</button>
+            <button class="btn btn-sand" onclick="switchPage('kicker')">⚽ Kickerabend</button>
+        </div>
+    </div>
+
+    <!-- ===============================================================
+         1. SMARTPHONE-FIRST: SCHNELLEINGABE FÜR TRAININGSSPIELE (GANZ OBEN!)
+         =============================================================== -->
+    <div class="hero-card" style="padding:18px 22px; margin-bottom:18px; border:1.5px solid rgba(52, 211, 153, 0.4);">
+        <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:10px; margin-bottom:12px;">
+            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                <span class="badge" id="ttr-session-badge" style="background:#10b981; color:#06281e; font-weight:800; font-size:11.5px; padding:5px 10px;">
+                    🟢 Session aktiv
+                </span>
+                <h3 style="font-size:19px; font-weight:800; color:#fff; margin:0;" id="ttr-session-title">
+                    🏆 TSV Graupa Trainings-Challenge
+                </h3>
+            </div>
+
+            <!-- Konsistente Steuerleiste inkl. Admin-Button (analog zum Turnierplaner) -->
+            <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+                <div id="ttr-admin-controls" class="hidden" style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+                    <button class="btn btn-emerald" style="padding:7px 13px; font-size:12px;" onclick="ttrAdminStartSession()">
+                        ➕ Neue Session starten
+                    </button>
+                    <button class="btn btn-amber" style="padding:7px 13px; font-size:12px;" onclick="ttrAdminEndSession()">
+                        🏁 Session beenden & auswerten
+                    </button>
+                </div>
+                <button id="ttr-admin-btn" class="btn btn-amber" style="padding:7px 13px; font-size:12px;" onclick="ttrToggleAdmin()">
+                    🔒 Admin-Modus entsperren
+                </button>
+            </div>
+        </div>
+
+        <!-- Quick-Match-Formular (Optimiert für Smartphone & Desktop) -->
+        <div id="ttr-match-entry-box" style="background:rgba(9, 21, 18, 0.78); border:1px solid var(--border-green); border-radius:16px; padding:14px 16px;">
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px; align-items:end;">
+                <!-- Spieler 1 -->
+                <div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                        <label style="font-size:11.5px; font-weight:800; color:#34d399; text-transform:uppercase;">🏓 Spieler 1</label>
+                        <label style="font-size:11px; color:var(--text-muted); cursor:pointer; display:inline-flex; align-items:center; gap:4px;">
+                            <input type="checkbox" id="ttr-p1-guest-chk" onchange="ttrToggleGuestInput(1)"> ➕ Gastspieler
+                        </label>
+                    </div>
+                    <select id="ttr-p1-select" class="form-input" style="font-weight:700;" onchange="ttrUpdateEloPreview()"></select>
+                    <div id="ttr-p1-guest-box" class="hidden" style="display:flex; gap:6px; margin-top:4px;">
+                        <input type="text" id="ttr-p1-guest-name" class="form-input" placeholder="Gast-Name…" oninput="ttrUpdateEloPreview()">
+                        <input type="number" id="ttr-p1-guest-lpz" class="form-input" style="width:95px;" value="1250" min="500" max="2400" title="Geschätzte LPZ des Gastes" oninput="ttrUpdateEloPreview()">
+                    </div>
+                </div>
+
+                <!-- Spieler 2 -->
+                <div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                        <label style="font-size:11.5px; font-weight:800; color:#fbbf24; text-transform:uppercase;">🏓 Spieler 2</label>
+                        <label style="font-size:11px; color:var(--text-muted); cursor:pointer; display:inline-flex; align-items:center; gap:4px;">
+                            <input type="checkbox" id="ttr-p2-guest-chk" onchange="ttrToggleGuestInput(2)"> ➕ Gastspieler
+                        </label>
+                    </div>
+                    <select id="ttr-p2-select" class="form-input" style="font-weight:700;" onchange="ttrUpdateEloPreview()"></select>
+                    <div id="ttr-p2-guest-box" class="hidden" style="display:flex; gap:6px; margin-top:4px;">
+                        <input type="text" id="ttr-p2-guest-name" class="form-input" placeholder="Gast-Name…" oninput="ttrUpdateEloPreview()">
+                        <input type="number" id="ttr-p2-guest-lpz" class="form-input" style="width:95px;" value="1250" min="500" max="2400" title="Geschätzte LPZ des Gastes" oninput="ttrUpdateEloPreview()">
+                    </div>
+                </div>
+            </div>
+
+            <!-- 1-Tap Satzergebnis-Buttons + Live-Elo-Vorschau -->
+            <div style="margin-top:12px; display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px;">
+                <div style="display:flex; flex-wrap:wrap; align-items:center; gap:6px;">
+                    <span style="font-size:11.5px; font-weight:800; color:var(--text-muted); text-transform:uppercase; margin-right:4px;">Sätze:</span>
+                    <button type="button" class="btn btn-emerald ttr-score-btn" data-score="3:0" onclick="ttrPickScore('3:0')" style="font-family:'JetBrains Mono',monospace; font-size:13.5px; padding:7px 13px;">3:0</button>
+                    <button type="button" class="btn btn-dark ttr-score-btn" data-score="3:1" onclick="ttrPickScore('3:1')" style="font-family:'JetBrains Mono',monospace; font-size:13.5px; padding:7px 13px; border:1px solid var(--border-green);">3:1</button>
+                    <button type="button" class="btn btn-dark ttr-score-btn" data-score="3:2" onclick="ttrPickScore('3:2')" style="font-family:'JetBrains Mono',monospace; font-size:13.5px; padding:7px 13px; border:1px solid var(--border-green);">3:2</button>
+                    <button type="button" class="btn btn-dark ttr-score-btn" data-score="2:3" onclick="ttrPickScore('2:3')" style="font-family:'JetBrains Mono',monospace; font-size:13.5px; padding:7px 13px; border:1px solid var(--border-green);">2:3</button>
+                    <button type="button" class="btn btn-dark ttr-score-btn" data-score="1:3" onclick="ttrPickScore('1:3')" style="font-family:'JetBrains Mono',monospace; font-size:13.5px; padding:7px 13px; border:1px solid var(--border-green);">1:3</button>
+                    <button type="button" class="btn btn-dark ttr-score-btn" data-score="0:3" onclick="ttrPickScore('0:3')" style="font-family:'JetBrains Mono',monospace; font-size:13.5px; padding:7px 13px; border:1px solid var(--border-green);">0:3</button>
+                </div>
+
+                <div style="display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin-left:auto;">
+                    <div id="ttr-elo-preview" style="font-size:12px; color:#a7f3d0; font-family:'JetBrains Mono',monospace; background:rgba(16,185,129,0.12); padding:6px 11px; border-radius:9px; border:1px solid rgba(52,211,153,0.25);">
+                        Wähle 2 Spieler…
+                    </div>
+                    <button type="button" id="ttr-submit-match-btn" class="btn btn-emerald" style="padding:9px 18px; font-size:13.5px;" onclick="ttrSubmitChallengeMatch()">
+                        ✅ Ergebnis eintragen
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===============================================================
+         2. ZWEISPALTIGES BOARD: LINKS CHALLENGE-RANGLISTE | RECHTS VEREINS-LPZ
+         =============================================================== -->
+    <div class="tt-hub-layout" style="grid-template-columns: 1.15fr 0.85fr; gap:18px; margin-bottom:20px; align-items:stretch;">
+
+        <!-- LINKE SPALTE: TRAININGS-CHALLENGE RANGLISTE & LETZTE SPIELE -->
+        <div class="sand-card" style="display:flex; flex-direction:column; justify-content:space-between;">
+            <div>
+                <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px; margin-bottom:10px;">
+                    <div>
+                        <span class="eyebrow-dark">Start bei 0 Pkt. · LPZ-gewichtetes Elo · 3:0-Bonus</span>
+                        <h3 style="font-size:21px; font-weight:800;">🏆 Trainings-Challenge Rangliste</h3>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                        <select id="ttr-session-history-select" class="form-input" style="width:auto; padding:5px 10px; font-size:12px; font-weight:700;" onchange="ttrSelectSessionView(this.value)">
+                            <option value="active">Aktuelle Session</option>
+                        </select>
+                        <button id="ttr-delete-session-btn" class="btn btn-dark hidden" style="padding:5px 10px; font-size:11.5px; background:#b91c1c; color:#fff;" onclick="ttrAdminDeleteSession()" title="Ausgewählte Challenge-Session unwiderruflich löschen">
+                            🗑️ Session löschen
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Champion-Podium (Erscheint automatisch, wenn Session ausgewertet/beendet wurde) -->
+                <div id="ttr-champion-podium" class="hidden" style="margin-bottom:14px;"></div>
+
+                <div style="overflow-x:auto; max-height:390px; overflow-y:auto;">
+                    <table class="tt-data-table">
+                        <thead>
+                            <tr>
+                                <th style="width:44px;">#</th>
+                                <th>Spieler</th>
+                                <th style="text-align:center;">Spiele</th>
+                                <th style="text-align:center;">S : N</th>
+                                <th style="text-align:center;">Sätze</th>
+                                <th style="text-align:right;">Punkte</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ttr-challenge-tbody">
+                            <tr><td colspan="6" style="text-align:center; padding:22px; color:#64748b;">Noch keine Trainingsspiele in dieser Session eingetragen.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Letzte Spiele der Session + Regel-Erklärung -->
+            <div style="margin-top:14px; padding-top:10px; border-top:1px solid var(--border-sand);">
+                <details id="ttr-recent-matches-details">
+                    <summary style="cursor:pointer; font-size:12.5px; font-weight:800; color:var(--emerald-dark); display:flex; justify-content:space-between; align-items:center;">
+                        <span>🕒 Letzte eingetragene Trainingsspiele (<span id="ttr-match-count-label">0</span>)</span>
+                        <span style="font-size:11px; color:#64748b;">⚖️ Elo-Formel: Basis K=24 · 3:0 (×1,3) · 3:1 (×1,1) · 3:2 (×0,85)</span>
+                    </summary>
+                    <div id="ttr-recent-matches-list" style="margin-top:8px; max-height:190px; overflow-y:auto; display:flex; flex-direction:column; gap:5px;"></div>
+                </details>
+            </div>
+        </div>
+
+        <!-- RECHTE SPALTE: KOMPAKTE VEREINS-LPZ-RANGLISTE (SCHMAL & SCHNELL) -->
+        <div class="sand-card" style="display:flex; flex-direction:column; justify-content:space-between;">
+            <div>
+                <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px; margin-bottom:10px;">
+                    <div>
+                        <span class="eyebrow-dark">Offizieller TTLive-Stand · TSV Graupa</span>
+                        <h3 style="font-size:21px; font-weight:800;">📊 Aktuelle LPZ-Rangliste</h3>
+                    </div>
+                    <button class="btn btn-dark" style="padding:6px 11px; font-size:11.5px;" onclick="ttrLoadRankingList(true)" title="Mitglieder & LPZ mit TTLive abgleichen">
+                        🔄 Sync
+                    </button>
+                </div>
+
+                <div style="display:flex; gap:6px; margin-bottom:8px;">
+                    <input type="text" id="ttr-search-input" class="form-input" style="padding:6px 10px; font-size:12.5px;" placeholder="🔍 Spieler / Team suchen…" oninput="ttrRenderPlayersTable()">
+                    <select id="ttr-sort-select" class="form-input" style="width:auto; padding:6px 8px; font-size:12px; font-weight:700;" onchange="ttrRenderPlayersTable()">
+                        <option value="lpz-desc" selected>LPZ ↓</option>
+                        <option value="lpz-asc">LPZ ↑</option>
+                        <option value="name-asc">Name A–Z</option>
+                        <option value="team-asc">Team</option>
+                    </select>
+                </div>
+
+                <div id="ttr-batch-progress" class="hidden" style="margin-bottom:8px;">
+                    <div style="display:flex; justify-content:space-between; font-size:11px; font-weight:700; margin-bottom:2px; color:var(--emerald-dark);">
+                        <span id="ttr-batch-text">Prüfe LivePZ…</span>
+                        <span id="ttr-batch-pct">0%</span>
+                    </div>
+                    <div class="tp-progress-bar" style="height:8px;">
+                        <div id="ttr-batch-fill" class="tp-progress-fill" style="width:0%;"></div>
+                    </div>
+                </div>
+
+                <div style="overflow-x:auto; max-height:390px; overflow-y:auto;">
+                    <table class="tt-data-table" id="ttr-players-table" style="font-size:12px;">
+                        <thead>
+                            <tr>
+                                <th style="width:42px;">#</th>
+                                <th>Spieler</th>
+                                <th>Team</th>
+                                <th style="text-align:right;">LPZ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ttr-players-tbody">
+                            <tr><td colspan="4" style="text-align:center; padding:20px;">⏳ Lade Spielerliste …</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div style="font-size:11px; color:#64748b; margin-top:8px; text-align:right;">
+                💡 Klick auf einen Spieler lädt unten sofort seine LPZ-Kurve & die 9 Analyse-Donuts!
+            </div>
+        </div>
+    </div>
+
+    <!-- ===============================================================
+         3. SPIELER-COCKPIT: LPZ-KURVE (SPIEL FÜR SPIEL) & 9 ANALYSE-DONUTS
+         =============================================================== -->
+    <div id="ttr-cockpit-card" class="hero-card" style="padding:22px 26px; margin-bottom:10px;">
+        <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:14px; margin-bottom:16px; padding-bottom:14px; border-bottom:1px solid var(--border-green);">
+            <div style="display:flex; flex-wrap:wrap; align-items:center; gap:12px; flex:1; min-width:260px;">
+                <div class="cybershape-badge" style="width:46px; height:46px; font-size:21px;">📈</div>
+                <div style="flex:1; min-width:220px;">
+                    <span class="eyebrow" style="margin-bottom:2px;">Spieler-Analyse & Performance-Telemetrie</span>
+                    <select id="ttr-player-select" class="form-input" style="max-width:420px; font-weight:800; font-size:14.5px; cursor:pointer;" onchange="ttrSelectPlayer(this.value)">
+                        <option value="">⏳ Lade gemeldete Spieler des TSV Graupa …</option>
+                    </select>
+                </div>
+            </div>
+
+            <div style="display:flex; flex-wrap:wrap; align-items:center; gap:8px;">
+                <!-- Umschalter: LPZ-Kurve vs. 9 Analyse-Donuts (Konsistentes Dark-Emerald-Design) -->
+                <button id="ttr-tab-btn-curve" class="btn btn-emerald" style="padding:8px 14px; font-size:12.5px;" onclick="ttrSwitchCockpitTab('curve')">
+                    📈 LPZ-Entwicklung (100 Spiele)
+                </button>
+                <button id="ttr-tab-btn-analyse" class="btn btn-dark" style="padding:8px 14px; font-size:12.5px; border:1px solid var(--border-green);" onclick="ttrSwitchCockpitTab('analyse')">
+                    🎯 Spiel-Analyse (9 Donuts)
+                </button>
+                <span id="ttr-sync-badge" class="badge" style="background:rgba(16,185,129,0.18); color:#34d399; border:1px solid var(--border-green); font-size:11px; padding:6px 10px;">
+                    ⏳ Synchronisiere …
+                </span>
+                <button class="btn btn-dark" style="padding:8px 12px; font-size:12px; border:1px solid var(--border-green);" onclick="ttrRefreshSelectedPlayer()" title="Spielerdaten frisch aus TTLive abrufen">
+                    🔄 Aktualisieren
+                </button>
+                <a id="ttr-direct-link" href="https://dresden.tischtennislive.de/" target="_blank" rel="noopener" class="btn btn-amber" style="padding:8px 13px; font-size:12px;">
+                    Original in TTLive ↗
+                </a>
+            </div>
+        </div>
+
+        <!-- 5 TELEMETRIE-KENNZAHLEN ZUM AUSGEWÄHLTEN SPIELER -->
+        <div class="grid-3" style="grid-template-columns:repeat(auto-fit, minmax(165px, 1fr)); gap:12px; margin-bottom:18px;">
+            <div class="sport-stat-box">
+                <div class="telemetry-label">🏓 Aktueller LPZ-Wert</div>
+                <div id="ttr-kpi-current" class="sport-stat-val" style="font-size:28px;">–</div>
+                <div id="ttr-kpi-team" style="font-size:11.5px; color:var(--text-muted); margin-top:2px;">Mannschaft wird geladen</div>
+            </div>
+            <div class="sport-stat-box">
+                <div class="telemetry-label">🏅 Vereins-Rang (Graupa)</div>
+                <div id="ttr-kpi-rank" class="sport-stat-val" style="font-size:28px; color:#fbbf24;">–</div>
+                <div id="ttr-kpi-rank-sub" style="font-size:11.5px; color:var(--text-muted); margin-top:2px;">unter allen gemeldeten Spielern</div>
+            </div>
+            <div class="sport-stat-box">
+                <div class="telemetry-label">📊 Performance-Trend</div>
+                <div id="ttr-kpi-trend" class="sport-stat-val" style="font-size:28px;">–</div>
+                <div id="ttr-kpi-trend-sub" style="font-size:11.5px; color:var(--text-muted); margin-top:2px;">Veränderung im Zeitraum</div>
+            </div>
+            <div class="sport-stat-box">
+                <div class="telemetry-label">👑 Höchstwert (Peak)</div>
+                <div id="ttr-kpi-max" class="sport-stat-val" style="font-size:28px; color:#38bdf8;">–</div>
+                <div id="ttr-kpi-min" style="font-size:11.5px; color:var(--text-muted); margin-top:2px;">Tiefstwert: –</div>
+            </div>
+            <div class="sport-stat-box">
+                <div class="telemetry-label">⚡ Einzel-Bilanz (Auswahl)</div>
+                <div id="ttr-kpi-count" class="sport-stat-val" style="font-size:28px; color:#fff;">–</div>
+                <div id="ttr-kpi-winrate" style="font-size:11.5px; color:var(--text-muted); margin-top:2px;">Siege : Niederlagen</div>
+            </div>
+        </div>
+
+        <!-- TAB 1: SPIEL-FÜR-SPIEL LPZ-ENTWICKLUNGSKURVE -->
+        <div id="ttr-cockpit-panel-curve" style="background:rgba(7, 18, 15, 0.85); border:1px solid var(--border-green); border-radius:18px; padding:16px 18px; position:relative;">
+            <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:10px; margin-bottom:12px;">
+                <div style="display:flex; flex-wrap:wrap; align-items:center; gap:10px;">
+                    <strong style="font-size:15px; color:#fff;" id="ttr-chart-title">LPZ-Entwicklung von Spiel zu Spiel</strong>
+                    <span style="font-size:11.5px; color:var(--text-muted);">
+                        <span style="color:#10b981;">● Sieg</span> · <span style="color:#ef4444;">● Niederlage</span> · <span style="color:#fbbf24;">◆ Q-TTR-Stichtag</span>
+                    </span>
+                </div>
+                <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                    <button id="ttr-range-100" class="btn btn-emerald" style="padding:6px 12px; font-size:12px;" onclick="ttrSetRange(100)">Letzte 100 Spiele</button>
+                    <button id="ttr-range-50" class="btn btn-dark" style="padding:6px 12px; font-size:12px; border:1px solid var(--border-green);" onclick="ttrSetRange(50)">Letzte 50 Spiele</button>
+                    <button id="ttr-range-25" class="btn btn-dark" style="padding:6px 12px; font-size:12px; border:1px solid var(--border-green);" onclick="ttrSetRange(25)">Letzte 25 Spiele</button>
+                </div>
+            </div>
+
+            <div style="position:relative; width:100%; height:340px;">
+                <canvas id="ttr-chart-canvas" style="width:100%; height:100%; display:block; cursor:crosshair;"></canvas>
+                <div id="ttr-chart-tooltip" class="hidden" style="position:absolute; pointer-events:none; background:rgba(9,21,18,0.96); border:1.5px solid #34d399; color:#fff; padding:10px 13px; border-radius:12px; font-size:12px; box-shadow:0 12px 28px rgba(0,0,0,0.55); z-index:20; min-width:225px; transition:opacity 0.1s;"></div>
+            </div>
+
+            <details id="ttr-history-details" style="margin-top:12px; border-top:1px solid rgba(255,255,255,0.1); padding-top:10px;">
+                <summary style="cursor:pointer; font-size:12.5px; font-weight:700; color:#34d399;">
+                    📋 Alle gewerteten Einzelspiele & Q-TTR-Stichtage zu dieser Kurve einblenden
+                </summary>
+                <div id="ttr-history-table-wrap" style="margin-top:10px; max-height:280px; overflow-y:auto;"></div>
+            </details>
+        </div>
+
+        <!-- TAB 2: DIE 9 HIGH-END SPIEL-ANALYSE-DONUTS (NACHGEBAUT & MODERNISIERT) -->
+        <div id="ttr-cockpit-panel-analyse" class="hidden" style="background:rgba(7, 18, 15, 0.85); border:1px solid var(--border-green); border-radius:18px; padding:18px 20px;">
+            <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:10px; margin-bottom:16px;">
+                <div>
+                    <strong style="font-size:16px; color:#fff;" id="ttr-analyse-title">🎯 Detail-Analyse: Stärke- & Nervenprofil</strong>
+                    <span style="font-size:12px; color:var(--text-muted); margin-left:8px;">(Auswertung aller offiziellen Punkt- & Turnierspiele in TTLive)</span>
+                </div>
+                <span class="badge" style="background:rgba(52,211,153,0.15); color:#34d399; font-size:11px; padding:4px 9px;">
+                    🟢 Gewonnen vs. 🔴 Verloren
+                </span>
+            </div>
+
+            <div id="ttr-analyse-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(230px, 1fr)); gap:14px;"></div>
+        </div>
+    </div>
+</section>
