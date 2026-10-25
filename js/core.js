@@ -17,13 +17,13 @@ const ALL_VIEWS = [
 ];
 
 const PAGE_TITLES = {
-    'home':          'TSV Graupa · Tischtennis | Home & Abteilung',
-    'spielbetrieb':  '🏓 Spielbetrieb, Tabellen & Bilanzen | TSV Graupa TT',
-    'tt-ranking':    '📈 TT-Ranking & Trainings-Challenge | TSV Graupa TT',
-    'tt-news':       '📰 TT-News & Videos | TSV Graupa TT',
-    'turnierplaner': '🏆 Turnierplaner | TSV Graupa TT',
-    'zaehlboard':    '🔢 Digitales Zählboard | TSV Graupa TT',
-    'impressum':     '⚖️ Impressum & Rechtliches | TSV Graupa TT'
+    'home':          '🏓 TSV Graupa TT | Home & Abteilung',
+    'spielbetrieb':  '🏓 TSV Graupa TT | 🏓 Spielbetrieb, Tabellen & Bilanzen',
+    'tt-ranking':    '🏓 TSV Graupa TT | 📈 TT-Ranking & Trainings-Challenge',
+    'tt-news':       '🏓 TSV Graupa TT | 📰 TT-News & Videos',
+    'turnierplaner': '🏓 TSV Graupa TT | 🏆 Turnierplaner',
+    'zaehlboard':    '🏓 TSV Graupa TT | 🔢 Digitales Zählboard',
+    'impressum':     '🏓 TSV Graupa TT | ⚖️ Impressum'
 };
 
 let currentActivePageId = 'home';
