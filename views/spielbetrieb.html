@@ -1,0 +1,36 @@
+<!-- ===============================================================
+     SPIELBETRIEB: MANNSCHAFTEN, LIGA-TABELLEN & GEGNER-INSPEKTOR
+     =============================================================== -->
+<section id="page-spielbetrieb" class="page-section">
+    <div class="section-header">
+        <div>
+            <span class="eyebrow">TSV Graupa e.V. · Punktspielbetrieb · Alle Ligen, Bilanzen & Spielpläne</span>
+            <h2 style="font-size:32px; font-weight:800;">🏓 Spielbetrieb</h2>
+        </div>
+    </div>
+
+    <div class="sand-card">
+        <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px;">
+            <div>
+                <span id="tt-saison-eyebrow" class="eyebrow-dark">Saison 2026/27 · Punktspielbetrieb · Klicke in der Tabelle auf beliebige Vereine für deren Details</span>
+                <h3 style="font-size:23px; font-weight:800;">🏅 Mannschaften des TSV Graupa</h3>
+            </div>
+            <div style="display:flex; flex-wrap:wrap; align-items:center; gap:8px;">
+                <label style="display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:700; color:var(--text-dark);">
+                    📅 Saison:
+                    <select id="tt-saison-select" class="form-input" style="width:auto; padding:5px 10px; font-weight:700; cursor:pointer;" onchange="changeTTSaison(this.value)"></select>
+                </label>
+                <span id="tt-live-sync-badge" class="badge" style="background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; font-size:11.5px; padding:5px 10px;">Lade Saison …</span>
+                <a id="tt-team-direct-link" href="https://dresden.tischtennislive.de/?L1=Public&L2=Verein&L2P=870&Page=Spielbetrieb&Sportart=96&Page2=Tabellen&Saison=2026" target="_blank" rel="noopener" class="btn btn-dark" style="padding:7px 12px; font-size:12px;">
+                    Original in TTLive ↗
+                </a>
+            </div>
+        </div>
+
+        <!-- Reiter (Tabs) für alle Mannschaften des TSV Graupa -->
+        <div id="tt-team-tabs" class="tt-team-tabs"></div>
+
+        <!-- Zweispaltige Mannschaftsansicht (Klick auf jedes Team der Liga möglich!) -->
+        <div id="tt-team-content" class="tt-hub-layout"></div>
+    </div>
+</section>
