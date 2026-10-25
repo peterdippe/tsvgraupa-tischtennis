@@ -52,3 +52,50 @@ Die Plattform arbeitet als schnelle Single-Page-Application (SPA) ohne eigenen k
     ├── turnierplaner.html   # Turnierplaner-Oberfläche
     ├── zaehlboard.html      # Digitales Zählboard
     └── impressum.html       # Impressum (§ 5 DDG), Gewährleistungs-Disclaimer & DSGVO
+
+📅 Anleitung: Saisonwechsel im Sommer (1-Klick-Automatik ohne Code-Änderung)
+Sobald im Sommer (meist Juli/August) die neuen Staffeln für die kommende Punktspielsaison in TischtennisLive (und ggf. click-TT) veröffentlicht sind, wird der Saisonwechsel direkt im Browser durchgeführt. Es muss keine Code-Datei angefasst werden.
+
+Schritt 1: Alte Saison abschließen & neue Saison aktivieren
+Öffne [https://www.tsvgraupa-tischtennis.de/#spielbetrieb](https://www.tsvgraupa-tischtennis.de/#spielbetrieb).
+
+Klicke oben rechts neben dem Saison-Dropdown auf den gelben Button „⚙️ Saison-Admin“ und gib dein Admin-Passwort ein.
+
+Trage im linken Kasten („1. Aktive Hauptsaison festlegen“) das neue Startjahr ein – zum Beispiel 2027 für die Saison 2027/28.
+
+Lass den Haken bei „Vorherige Saison vorher final in Drive sichern“ aktiviert.
+
+Klicke auf „🚀 Saisonwechsel jetzt speichern & aktivieren“.
+
+Was dabei automatisch im Hintergrund passiert:
+
+Das Backend ruft ein letztes Mal den finalen Stand der alten Saison ab und friert ihn dauerhaft in dippe_tt_saison_YYYY.json auf Google Drive ein.
+
+In der Steuerdatei dippe_tt_meta_db.json wird activeSaison auf das neue Jahr umgestellt.
+
+Alle Saisons vor dem neuen Jahr gelten ab sofort automatisch als statisches Archiv (blitzschnelles Laden direkt aus Google Drive).
+
+Das Saison-Dropdown erweitert sich automatisch um das neue Spieljahr und lädt es für alle Besucher als Standard-Saison.
+
+Die neue Datei dippe_tt_saison_<NEUES_JAHR>.json wird beim ersten Abruf automatisch im Vereins-Ordner auf Google Drive angelegt.
+
+Schritt 2: Optional – Überregionale click-TT-Mannschaft eintragen (Oberliga / Regionalliga)
+Falls in der neuen Saison eine Mannschaft des TSV Graupa überregional (oberhalb der Sachsenliga, z. B. 1. Damen in der DTTB Oberliga Mitte) spielt:
+
+Öffne im „⚙️ Saison-Admin“ den rechten Kasten („2. Überregionale click-TT-Mannschaft“).
+
+Kopiere von mytischtennis.de/click-tt zwei Links der neuen Saison in die Felder:
+
+Liga-Tabelle URL: den Link zur Gesamttabelle (.../tabelle/gesamt)
+
+Mannschafts-Bilanzen URL: den Link zu den Spielerbilanzen des TSV Graupa (.../mannschaft/<ID>/TSV_Graupa/spielerbilanzen/gesamt)
+(Die Links für /infos und /spiele leitet das System automatisch selbst aus der Bilanzen-URL ab.)
+
+Klicke auf „💾 click-TT-Team speichern“.(Spielt in einer Saison keine Mannschaft überregional in click-TT, klickst du einfach auf „🗑️ Leeren“.)
+
+Schritt 3: Optional – Neue Session in der Trainings-Challenge starten
+Wechsle auf [https://www.tsvgraupa-tischtennis.de/#tt-ranking](https://www.tsvgraupa-tischtennis.de/#tt-ranking).
+
+Klicke oben rechts auf „🔒 Admin-Modus entsperren“.
+
+Klicke auf „🏁 Session beenden (Champion küren)“ (damit die alte Saison-Challenge samt Siegerpodest ins Archiv wandert) und anschließend auf „🆕 Neue Session starten“ (alle Spieler starten für die neue Saison wieder bei 0 Punkten).
