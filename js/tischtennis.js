@@ -84,6 +84,12 @@ function hasValidParsedDetails(d) {
     if (!d || d.error) return false;
     const hasSingles = d.singlesTable && Array.isArray(d.singlesTable.rows) && d.singlesTable.rows.length > 0;
     const hasSchedule = d.scheduleTable && Array.isArray(d.scheduleTable.rows) && d.scheduleTable.rows.length > 0;
+    if (hasSchedule) {
+        const firstCell = String(d.scheduleTable.rows[0]?.cells?.[0] || '');
+        // Verhindert, dass ein versehentlich mit dem TTLive-Parser gelesener click-TT-Spielplan als gültig durchgeht
+        if (/^[A-Za-z]{2}\./.test(firstCell)) return false;
+    }
+    if (d.sourcePortal === 'click-tt' && !hasSingles) return false;
     return Boolean(hasSingles || hasSchedule);
 }
 
@@ -300,6 +306,8 @@ async function loadAllGraupaTeamsFromTTLive(forceRefresh) {
 
         if (result.cachedTeams && typeof result.cachedTeams === 'object') {
             Object.keys(result.cachedTeams).forEach(tKey => {
+                // WICHTIG: click-TT-Teams niemals mit dem TTLive-Parser vorparsen!
+                if (tKey.includes('clicktt')) return;
                 const rawHtml = result.cachedTeams[tKey];
                 if (isHtmlValidTTLive(rawHtml)) {
                     const parsedDet = parseTTLiveTeamDetailHtml(rawHtml);
@@ -313,7 +321,7 @@ async function loadAllGraupaTeamsFromTTLive(forceRefresh) {
                     }
                 }
             });
-            try { localStorage.setItem('dippe_tt_details_v7_' + mySaison, JSON.stringify(ttTeamDetailsCache)); } catch (e) {}
+            try { localStorage.setItem('dippe_tt_details_v9_' + mySaison, JSON.stringify(ttTeamDetailsCache)); } catch (e) {}
         }
 
         if (!activeGraupaTeamId || !ttTeamsList.some(t => t.id === activeGraupaTeamId)) {
@@ -728,14 +736,14 @@ function extractClickTTScheduleFromTable(rows) {
         let tag = '';
         let dat = cells[dateIdx];
         // Trennt "Sa., 26.09.2026" oder "Sa. 26.09.2026" sauber in Tag ("Sa") und Datum ("26.09.26")!
-        const combinedDateM = dat.match(/^([A-Za-zÄÖÜäöüß]{2})[.,]?\s*(\d{2}\.\d{2}\.\d{2,4})$/);
+        const combinedDateM = dat.match(/^([A-Za-zÄÖÜäöüß]{2})[.,]*\s*(\d{2}\.\d{2}\.\d{2,4})$/);
         if (combinedDateM) {
             tag = combinedDateM[1];
             dat = combinedDateM[2];
-        } else if (dateIdx > 0 && /^[A-Za-zÄÖÜäöüß]{2}[.,]?$/.test(cells[dateIdx - 1])) {
+        } else if (dateIdx > 0 && /^[A-Za-zÄÖÜäöüß]{2}[.,]*$/.test(cells[dateIdx - 1])) {
             tag = cells[dateIdx - 1].replace(/[.,]+$/, '');
         }
-        dat = dat.replace(/^[A-Za-zÄÖÜäöüß]{2}[.,]?\s*/, '').replace(/\.20(\d{2})$/, '.$1');
+        dat = dat.replace(/^[A-Za-zÄÖÜäöüß]{2}[.,]*\s*/, '').replace(/^[.,\s]+/, '').replace(/\.20(\d{2})$/, '.$1');
 
         const zeit = cells[timeIdx].replace(/\s+/g, ' ').trim();
 
@@ -1055,14 +1063,29 @@ async function loadAndRenderInspectedTeam(baseGraupaTeam, subTeam, forceRefresh)
     }
 
     const tKey = subTeam.teamKey;
-    const isCurrentSeason = Number(ttCurrentSaison) >= 2026;
+    const isCurrentSeason = Number(ttCurrentSaison) >= Number(typeof ttActiveSaison !== 'undefined' ? ttActiveSaison : 2026);
     const cached = !forceRefresh ? (ttTeamDetailsCache[tKey] || (subTeam.isOwnGraupaTeam ? ttTeamDetailsCache[baseGraupaTeam.id] : null)) : null;
     const isValidCache = hasValidParsedDetails(cached);
+    const portalLabel = subTeam.sourcePortal === 'click-tt' ? 'click-TT' : 'TTLive';
 
-    renderGraupaTeamLayout(baseGraupaTeam, isValidCache ? cached : null, !isValidCache);
-
+    // Fall 1: Daten sind bereits in dieser Sitzung live verifiziert (oder abgeschlossene Archiv-Saison)
     if (isValidCache && (!isCurrentSeason || cached._verifiedLiveInSession)) {
+        renderGraupaTeamLayout(baseGraupaTeam, cached, false, false);
+        const timeStr = new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+        if (isCurrentSeason) {
+            setTTLiveSyncBadge(`✅ Live abgeglichen (${portalLabel} · ${subTeam.teamName} · ${timeStr} Uhr)`, '#d1fae5', '#065f46', '#6ee7b7');
+        }
         return;
+    }
+
+    // Fall 2: Es muss im Hintergrund geladen oder gegen TTLive/click-TT verifiziert werden ->
+    // Status-Badge SOFORT ehrlich auf Gelb ("Lade / Prüfe...") setzen!
+    if (isValidCache) {
+        setTTLiveSyncBadge(`⚡ Cache angezeigt · 🔄 Prüfe aktuellen Live-Stand für ${subTeam.teamName} (${portalLabel}) …`, '#fef3c7', '#92400e', '#fcd34d');
+        renderGraupaTeamLayout(baseGraupaTeam, cached, false, true);
+    } else {
+        setTTLiveSyncBadge(`⏳ Lade Bilanzen, Spielplan & Halle für ${subTeam.teamName} von ${portalLabel} …`, '#fef3c7', '#92400e', '#fcd34d');
+        renderGraupaTeamLayout(baseGraupaTeam, null, true, true);
     }
 
     const mySaison = ttCurrentSaison;
@@ -1070,7 +1093,6 @@ async function loadAndRenderInspectedTeam(baseGraupaTeam, subTeam, forceRefresh)
         const result = await fetchTTLiveHtmlCascade('team', subTeam.teamUrl, tKey, Boolean(forceRefresh));
         if (ttCurrentSaison !== mySaison) return;
 
-        // WICHTIG: Hier wird jetzt "subTeam" (das tatsächlich angeklickte Team!) übergeben!
         const details = subTeam.sourcePortal === 'click-tt'
             ? parseClickTTTeamDetailHtml(result.html, result.infosHtml, result.spieleHtml, subTeam)
             : parseTTLiveTeamDetailHtml(result.html);
@@ -1083,20 +1105,27 @@ async function loadAndRenderInspectedTeam(baseGraupaTeam, subTeam, forceRefresh)
 
             ttTeamDetailsCache[tKey] = details;
             if (subTeam.isOwnGraupaTeam) ttTeamDetailsCache[baseGraupaTeam.id] = details;
-            try { localStorage.setItem('dippe_tt_details_v8_' + mySaison, JSON.stringify(ttTeamDetailsCache)); } catch (e) {}
+            try { localStorage.setItem('dippe_tt_details_v9_' + mySaison, JSON.stringify(ttTeamDetailsCache)); } catch (e) {}
 
             if (activeGraupaTeamId === baseGraupaTeam.id && inspectedSubTeam && inspectedSubTeam.teamKey === tKey) {
-                renderGraupaTeamLayout(baseGraupaTeam, details, false);
+                renderGraupaTeamLayout(baseGraupaTeam, details, false, false);
+                const timeStr = new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                setTTLiveSyncBadge(`✅ Live abgeglichen mit ${portalLabel} · ${subTeam.teamName} (${timeStr} Uhr)`, '#d1fae5', '#065f46', '#6ee7b7');
             }
         }
     } catch (err) {
         console.warn('Fehler beim Laden der Mannschaftsdetails:', err);
-        if (!isValidCache && activeGraupaTeamId === baseGraupaTeam.id && inspectedSubTeam && inspectedSubTeam.teamKey === tKey) {
-            renderGraupaTeamLayout(baseGraupaTeam, { error: String(err.message || err) }, false);
+        if (activeGraupaTeamId === baseGraupaTeam.id && inspectedSubTeam && inspectedSubTeam.teamKey === tKey) {
+            if (!isValidCache) {
+                renderGraupaTeamLayout(baseGraupaTeam, { error: String(err.message || err) }, false, false);
+                setTTLiveSyncBadge(`⚠️ Abruf für ${subTeam.teamName} fehlgeschlagen`, '#fee2e2', '#b91c1c', '#fca5a5');
+            } else {
+                renderGraupaTeamLayout(baseGraupaTeam, cached, false, false);
+                setTTLiveSyncBadge(`☁️ Gespeicherter Stand für ${subTeam.teamName}`, '#fef3c7', '#92400e', '#fcd34d');
+            }
         }
     }
 }
-
 function parseTTLiveTeamDetailHtml(htmlString) {
     const doc = sanitizeTTLiveDom(htmlString);
     const fullText = doc.body ? doc.body.textContent : '';
@@ -1350,7 +1379,7 @@ function extractCleanDataTable(rows, headerIdx, kind) {
 // ===================================================================
 // SCHRITT C: ZWEISPALTIGES RENDERING (MIT QUELLEN-TRANSPARENZ & GEGNER-HIGHLIGHT)
 // ===================================================================
-function renderGraupaTeamLayout(team, details, isLoadingDetails) {
+function renderGraupaTeamLayout(team, details, isLoadingDetails, isRevalidating = false) {
     const cont = document.getElementById('tt-team-content');
     if (!cont) return;
 
@@ -1415,6 +1444,12 @@ function renderGraupaTeamLayout(team, details, isLoadingDetails) {
             <button class="btn btn-emerald" style="padding:5px 11px; font-size:11.5px;" onclick="selectGraupaTeamTab('${team.id}', false)">
                 🏓 Zurück zu ${domEsc(team.fullTeamName || team.tabName)}
             </button>
+        </div>
+    ` : '';
+    const revalidatingBannerHtml = (isRevalidating && !isLoadingDetails) ? `
+        <div style="background:#fffbeb; border:1.5px solid #f59e0b; color:#92400e; border-radius:12px; padding:8px 14px; display:flex; align-items:center; gap:8px; font-size:12.5px; font-weight:700;">
+            <span>🔄</span>
+            <span>Prüfe im Hintergrund aktuellen Live-Stand für <b>${domEsc(curSub.teamName)}</b> bei ${portalName} …</span>
         </div>
     ` : '';
 
