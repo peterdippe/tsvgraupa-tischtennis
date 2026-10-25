@@ -216,7 +216,7 @@ async function switchPage(pageId, skipHistoryPush = false) {
             history.pushState({ pageId: normId }, PAGE_TITLES[normId] || 'TSV Graupa TT', targetHash);
         }
     }
-    document.title = PAGE_TITLES[normId] || 'TSV Graupa · Tischtennis';
+    document.title = PAGE_TITLES[normId] || '🏓 TSV Graupa TT';
 
     document.querySelectorAll('.page-section').forEach(el => el.classList.remove('active'));
     document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
