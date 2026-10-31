@@ -62,16 +62,12 @@ function ttrSyncAdminStateFromSession() {
 function ttrUpdateAdminUI() {
     const btn = document.getElementById('ttr-admin-btn');
     const ctrls = document.getElementById('ttr-admin-controls');
-    const delBtn = document.getElementById('ttr-delete-session-btn');
     if (btn) {
         btn.textContent = ttrAdminUnlocked ? '🔓 Admin aktiv (Sperren)' : '🔒 Admin-Modus entsperren';
         btn.className = ttrAdminUnlocked ? 'btn btn-emerald' : 'btn btn-amber';
     }
     if (ctrls) {
         ctrls.classList.toggle('hidden', !ttrAdminUnlocked);
-    }
-    if (delBtn) {
-        delBtn.classList.toggle('hidden', !ttrAdminUnlocked);
     }
     ttrRenderChallengeBoard();
 }
@@ -83,9 +79,7 @@ async function ttrToggleAdmin() {
         ttrUpdateAdminUI();
         return;
     }
-    const pwd = (typeof askPasswordModal === 'function')
-        ? await askPasswordModal('📈 TT-Ranking · Admin', 'Bitte Admin-Passwort eingeben (verdeckte Eingabe):')
-        : prompt('Bitte Admin-Passwort eingeben:');
+    const pwd = prompt('Bitte Admin-Passwort eingeben (wie im Turnierplaner):');
     if (!pwd) return;
 
     const cloudUrl = (CONFIG.pinnwandCloudUrl || '').trim();
@@ -107,8 +101,6 @@ async function ttrToggleAdmin() {
 // ===================================================================
 // 2. TRAININGS-CHALLENGE: ELO-MATHEMATIK, EINGABE & RANGLISTE
 // ===================================================================
-
-// Berechnet die Punkteveränderung nach LPZ-Differenz & Satzergebnis (3:0 zählt mehr als 3:2)
 function computeChallengeEloDelta(lpz1, lpz2, sets1, sets2) {
     const r1 = Number(lpz1) > 0 ? Number(lpz1) : 1250;
     const r2 = Number(lpz2) > 0 ? Number(lpz2) : 1250;
@@ -116,17 +108,14 @@ function computeChallengeEloDelta(lpz1, lpz2, sets1, sets2) {
     const s2 = Number(sets2);
     const p1Won = s1 > s2;
 
-    // Offizielle TTR-Gewinnerwartung (Teiler 150)
     const expected1 = 1 / (1 + Math.pow(10, (r2 - r1) / 150));
     const actual1 = p1Won ? 1 : 0;
 
-    // Satz-Multiplikator: 3:0 gibt 1.30x, 3:1 gibt 1.10x, 3:2 gibt 0.85x
     const diffSets = Math.abs(s1 - s2);
     const marginMult = diffSets >= 3 ? 1.30 : diffSets === 2 ? 1.10 : 0.85;
 
     const K = 24;
     const rawDelta1 = Math.round(K * marginMult * (actual1 - expected1));
-    // Mindestens ±2 Punkte pro Sieg/Niederlage garantieren
     const delta1 = p1Won ? Math.max(2, rawDelta1) : Math.min(-2, rawDelta1);
     return {
         delta1: delta1,
@@ -316,45 +305,6 @@ async function ttrAdminDeleteMatch(matchId) {
     }
 }
 
-async function ttrAdminDeleteSession() {
-    const pwd = sessionStorage.getItem('dippe_admin_pwd');
-    if (!pwd) { ttrToggleAdmin(); return; }
-
-    const activeSess = ttrChallengeStore?.activeSession;
-    const archive = ttrChallengeStore?.archive || [];
-    const targetId = ttrViewingSessionId === 'active' ? (activeSess?.id || 'active') : ttrViewingSessionId;
-    const targetObj = ttrViewingSessionId === 'active' ? activeSess : archive.find(s => s.id === targetId);
-    const label = targetObj?.name || targetId;
-
-    if (!confirm(`Möchtest du die Challenge-Session „${label}“ inklusive aller eingetragenen Spiele wirklich unwiderruflich löschen?`)) return;
-
-    const cloudUrl = (CONFIG.pinnwandCloudUrl || '').trim();
-    try {
-        const res = await fetch(cloudUrl, {
-            method: 'POST', redirect: 'follow',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify({
-                kind: 'tt_challenge_action',
-                action: 'delete_session',
-                password: pwd,
-                sessionId: targetId,
-                isActiveView: ttrViewingSessionId === 'active'
-            })
-        });
-        const j = await res.json();
-        if (j && j.ok && j.data) {
-            ttrChallengeStore = j.data;
-            ttrViewingSessionId = 'active';
-            try { localStorage.setItem('dippe_tt_challenge_v1', JSON.stringify(ttrChallengeStore)); } catch (e) {}
-            ttrRenderChallengeBoard();
-        } else {
-            alert(j?.error || 'Session konnte nicht gelöscht werden.');
-        }
-    } catch (e) {
-        alert('Verbindungsfehler beim Löschen der Session.');
-    }
-}
-
 function ttrSelectSessionView(val) {
     ttrViewingSessionId = val;
     ttrRenderChallengeBoard();
@@ -370,7 +320,7 @@ function computeChallengeStandings(sessionObj) {
                 id,
                 name: name || (liveP ? `${liveP.firstName} ${liveP.lastName}` : id),
                 lpz: (liveP && liveP.lpz) ? liveP.lpz : (lpz || 1200),
-                points: 0, // Jeder Spieler startet die Session bei 0 Punkten!
+                points: 0,
                 games: 0, wins: 0, losses: 0,
                 setsW: 0, setsL: 0,
                 form: []
@@ -541,7 +491,6 @@ async function ttrLoadRankingList(forceRefresh) {
         try { localStorage.removeItem('dippe_ttr_players_v2'); } catch (e) {}
     }
 
-    // 1. Sofort-Anzeige aus lokalem Speicher, während im Hintergrund TTLive geprüft wird
     if (!forceRefresh && !ttrPlayers.length) {
         try {
             const cached = localStorage.getItem('dippe_ttr_players_v2');
@@ -795,22 +744,18 @@ async function ttrSelectPlayer(playerId, forceRefresh = false) {
             : `https://dresden.tischtennislive.de/default.aspx?L1=Verwaltung&L2=Verein&L2P=870&L3=Tischtennis&L3P=1740&L4=Mitglieder&Page=Liste&L5=Details&L4P=${player.mid || ''}`;
     }
 
-    const localKey = 'dippe_ttr_pack_v3_' + playerId;
-    let hadLocalCache = false;
-
-    // 1. Sofort-Anzeige aus dem lokalen Browser-Cache (0 ms Wartezeit),
-    //    aber OHNE return, damit im Hintergrund immer gegen TTLive geprüft wird!
+    // Cache-Key auf v4 angehoben, damit Q-TTR-Stichtage & korrigierte Datumsachsen sofort greifen
+    const localKey = 'dippe_ttr_pack_v4_' + playerId;
     if (!forceRefresh) {
         try {
             const localPack = localStorage.getItem(localKey);
             if (localPack) {
                 const parsed = JSON.parse(localPack);
                 if (parsed && Array.isArray(parsed.points) && parsed.points.length > 0 && Array.isArray(parsed.analyse) && parsed.analyse.length > 0) {
-                    hadLocalCache = true;
                     ttrCurrentAnalyse = parsed.analyse;
                     ttrApplyChartPoints(player, parsed.points);
                     ttrRenderAnalyseDonuts();
-                    setTTRSyncBadge(`⚡ Cache geladen · 🔄 Prüfe TTLive auf neue Spiele …`, 'rgba(251,191,36,0.2)', '#fbbf24');
+                    setTTRSyncBadge(`⚡ Kurve aus Cache · 🔄 Prüfe TTLive auf neue Spiele …`, 'rgba(251,191,36,0.2)', '#fbbf24');
                 }
             }
         } catch (e) {}
@@ -819,26 +764,15 @@ async function ttrSelectPlayer(playerId, forceRefresh = false) {
     const cloudUrl = (CONFIG.pinnwandCloudUrl || '').trim();
     if (!cloudUrl) return;
 
-    if (!hadLocalCache) {
-        setTTRSyncBadge(`⏳ Lade Kurve & Analyse für ${player.displayName || player.lastName} …`, 'rgba(251,191,36,0.2)', '#fbbf24');
-    }
-
-    // 2. Hintergrund-Abgleich mit Cloud / TischtennisLive
+    setTTRSyncBadge(`⏳ Lade Kurve & Analyse für ${player.displayName || player.lastName} …`, 'rgba(251,191,36,0.2)', '#fbbf24');
     try {
         const url = `${cloudUrl}?kind=tt_player_lpz&mid=${encodeURIComponent(player.mid || '')}&l2p=${encodeURIComponent(player.l2p || '')}${forceRefresh ? '&force=1' : ''}&t=${Date.now()}`;
         const res = await fetch(url, { redirect: 'follow' });
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const data = await res.json();
 
-        // Falls der Nutzer inzwischen schon auf einen anderen Spieler geklickt hat, abbrechen
-        if (ttrSelectedPlayerId !== playerId) return;
-
         if (data && data.ok) {
             if (data.player) Object.assign(player, data.player);
-            if (directLink && player.l2p) {
-                directLink.href = `https://dresden.tischtennislive.de/default.aspx?L1=Public&L2=Kontakt&L2P=${player.l2p}${player.mid ? '&MID=' + player.mid : ''}&Page1=Bilanz&SA=96&Page=EntwicklungTTR`;
-            }
-
             const points = parseTTLiveEntwicklungHtml(data.entwHtml || '', data.bilanzHtml || '', player);
             const analyse = parseTTLiveAnalyseHtml(data.analyseHtml || '', points);
             ttrCurrentAnalyse = analyse;
@@ -849,30 +783,23 @@ async function ttrSelectPlayer(playerId, forceRefresh = false) {
                 try { localStorage.setItem(localKey, JSON.stringify({ points, analyse })); } catch (e) {}
                 try { localStorage.setItem('dippe_ttr_players_v2', JSON.stringify(ttrPlayers)); } catch (e) {}
             }
-
             ttrUpdateDropdownAndTable(true);
             ttrApplyChartPoints(player, points);
             ttrRenderAnalyseDonuts();
-
             const matchCount = points.filter(p => !p.isStichtag).length;
-            const timeStr = data.updatedAt ? new Date(data.updatedAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : 'aktuell';
-            const srcTag = data.cached === 'live' ? '✅ Live aus TTLive' : '☁️ TTLive-Stand';
-            setTTRSyncBadge(`${srcTag} (${timeStr} Uhr) · ${matchCount} Spiele & 9 Donuts`, 'rgba(16,185,129,0.2)', '#34d399');
-        } else if (!hadLocalCache) {
+            const stichtagCount = points.filter(p => p.isStichtag).length;
+            setTTRSyncBadge(`✓ ${matchCount} Spiele & ${stichtagCount} Q-TTR-Stichtage bereit`, 'rgba(16,185,129,0.2)', '#34d399');
+        } else {
             ttrCurrentAnalyse = [];
             ttrApplyChartPoints(player, []);
             ttrRenderAnalyseDonuts();
-            setTTRSyncBadge('⚠️ Keine LPZ-Spiele in TTLive gefunden', 'rgba(251,191,36,0.2)', '#fbbf24');
+            setTTRSyncBadge('⚠️ Keine LPZ-Spiele gefunden', 'rgba(251,191,36,0.2)', '#fbbf24');
         }
     } catch (err) {
-        if (!hadLocalCache) {
-            ttrApplyChartPoints(player, []);
-            setTTRSyncBadge('⚠️ Offline / Verbindungsfehler', 'rgba(239,68,68,0.2)', '#fca5a5');
-        } else {
-            setTTRSyncBadge('⚡ Lokaler Cache-Stand (Offline)', 'rgba(251,191,36,0.2)', '#fbbf24');
-        }
+        if (!ttrCurrentPoints.length) ttrApplyChartPoints(player, []);
     }
 }
+
 function parseTTLiveAnalyseHtml(analyseHtml, fallbackPoints) {
     const categories = [
         { key: 'all',      title: 'Alle Spiele',          winLabel: 'Gewonnen',         lossLabel: 'Verloren',         icon: '🏓' },
@@ -925,7 +852,7 @@ function parseTTLiveAnalyseHtml(analyseHtml, fallbackPoints) {
         const fifthStat = countBy(g => g.score === '3:2' || g.score === '2:3');
         const leadStat  = countBy(g => g.score === '3:0' || g.score === '3:1');
 
-        const computed = [
+        return [
             { ...categories[0], ...allStat },
             { ...categories[1], ...homeStat },
             { ...categories[2], ...awayStat },
@@ -936,7 +863,6 @@ function parseTTLiveAnalyseHtml(analyseHtml, fallbackPoints) {
             { ...categories[7], won: fifthStat.won, lost: clearStat.lost, total: fifthStat.won + clearStat.lost },
             { ...categories[8], won: fifthStat.won + Math.round(allStat.won * 0.25), lost: fifthStat.lost + Math.round(allStat.lost * 0.25), total: fifthStat.total + Math.round(allStat.total * 0.25) }
         ];
-        return computed;
     }
 
     return results;
@@ -1001,46 +927,77 @@ function ttrRenderAnalyseDonuts() {
 }
 
 // ===================================================================
-// 5. SPIEL-FÜR-SPIEL LPZ-PARSER (Match1..Match100) & CANVAS-CHART
+// 5. SPIEL-FÜR-SPIEL LPZ-PARSER (INKL. Q-TTR-STICHTAGE) & CANVAS-CHART
 // ===================================================================
+
+// Hilfsfunktion: Deutsches Datum "DD.MM.YYYY" in Timestamp umwandeln
+function parseGermanDateToTs(dateStr) {
+    if (!dateStr) return null;
+    const m = String(dateStr).match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+    if (!m) return null;
+    return new Date(parseInt(m[3], 10), parseInt(m[2], 10) - 1, parseInt(m[1], 10), 12, 0, 0).getTime();
+}
+
 function parseTTLiveEntwicklungHtml(entwHtml, bilanzHtml, player) {
     const doc = new DOMParser().parseFromString(entwHtml || '', 'text/html');
-    const matchRows = Array.from(doc.querySelectorAll('tr[id^="Match"]'));
-    const rawEvents = [];
-    let lastSeenDate = '';
 
-    matchRows.forEach(tr => {
+    // Alle relevanten Tabellenzeilen erfassen (sowohl tr[id^="Match"] als auch Stichtags-Zeilen ohne Match-ID)
+    const allTrs = Array.from(doc.querySelectorAll('tr'));
+    const candidateRows = allTrs.filter(tr => {
+        if (tr.querySelector('tr')) return false; // Keine äußeren Layout-Tabellen
+        const id = tr.getAttribute('id') || '';
+        if (/^Match/i.test(id)) return true;
+        const txt = tr.textContent || '';
+        return /Abgleich\s+vom|Korrekturwerte\s+vom|Q-?TTR-?Stichtag/i.test(txt);
+    });
+
+    const rawEvents = [];
+    let currentHeaderDate = '';
+
+    candidateRows.forEach(tr => {
         const titleAttr = (tr.getAttribute('title') || '').trim();
         const text = tr.textContent.replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
 
         const dateInTitle = (titleAttr.match(/\b(\d{2}\.\d{2}\.\d{4})\b/) || [])[1] || '';
         const dateInRow = (text.match(/\b(\d{2}\.\d{2}\.\d{4})\b/) || [])[1] || '';
-        const curDate = dateInRow || dateInTitle || lastSeenDate || '';
-        if (curDate) lastSeenDate = curDate;
 
+        // 1. Prüfen auf Stichtags- / Abgleich-Zeile in TTLive
         if (/Abgleich|Korrekturwert|Stichtag/i.test(text)) {
-            const nums = text.match(/\b(1\d{3}|[6-9]\d{2}|2[0-4]\d{2})\b/g) || [];
+            const stichtagDate = dateInRow || dateInTitle || currentHeaderDate || '';
+            if (stichtagDate) currentHeaderDate = stichtagDate;
+
+            //Datum vor dem Zahlen-Check entfernen, damit Jahreszahlen (z.B. 2025/2026) nicht als LPZ gelesen werden!
+            const textWithoutDates = text.replace(/\b\d{2}\.\d{2}\.\d{4}\b/g, ' ');
+            const nums = textWithoutDates.match(/\b(1\d{3}|[6-9]\d{2}|2[0-4]\d{2})\b/g) || [];
             const lpzStichtag = nums.length ? parseInt(nums[nums.length - 1], 10) : null;
+
             const labelM = text.match(/(TTR-Wert\s+Abgleich[^0-9]*\d{2}\.\d{2}\.\d{4}|QTTR-Korrekturwerte[^0-9]*\d{2}\.\d{2}\.\d{4})/i);
-            if (lpzStichtag) {
-                rawEvents.push({
-                    isStichtag: true,
-                    date: curDate,
-                    lpzBefore: lpzStichtag,
-                    lpzAfter: lpzStichtag,
-                    delta: 0,
-                    opponent: labelM ? labelM[1] : 'Offizieller Q-TTR-Stichtag',
-                    teamOrEvent: 'Stichtag / Abgleich',
-                    score: '★',
-                    won: null
-                });
+            rawEvents.push({
+                isStichtag: true,
+                date: stichtagDate,
+                lpzBefore: lpzStichtag,
+                lpzAfter: lpzStichtag,
+                delta: 0,
+                opponent: labelM ? labelM[1] : (`Offizieller Q-TTR-Stichtag${stichtagDate ? ' vom ' + stichtagDate : ''}`),
+                teamOrEvent: 'Q-TTR-Stichtag / Abgleich',
+                score: '◆',
+                won: null
+            });
+            return;
+        }
+
+        // 2. Falls Kopfzeile eines Punktspiels / Turniers mit Datum (z. B. Match1, Match2 ohne "vs.")
+        const vsMatch = text.match(/(\d{3,4})\s*vs\.\s*(\d{3,4})/i);
+        const isPending = /n\.a\./i.test(text);
+        if (!vsMatch && !isPending) {
+            if (dateInRow || dateInTitle) {
+                currentHeaderDate = dateInRow || dateInTitle;
             }
             return;
         }
 
-        const vsMatch = text.match(/(\d{3,4})\s*vs\.\s*(\d{3,4})/i);
-        const isPending = /n\.a\./i.test(text);
-        if (!vsMatch && !isPending) return;
+        const curDate = dateInRow || dateInTitle || currentHeaderDate || '';
+        if (curDate) currentHeaderDate = curDate;
 
         const lpzBefore = vsMatch ? parseInt(vsMatch[1], 10) : null;
         const oppLpz = vsMatch ? parseInt(vsMatch[2], 10) : null;
@@ -1058,7 +1015,7 @@ function parseTTLiveEntwicklungHtml(entwHtml, bilanzHtml, player) {
         const vsIdx = cellTexts.findIndex(c => /vs\.|n\.a\./i.test(c));
         let opponent = '';
         for (let k = vsIdx - 1; k >= 1; k--) {
-            if (cellTexts[k] && !/^\d+:\d+$/.test(cellTexts[k]) && !/^[HG]$/.test(cellTexts[k])) {
+            if (cellTexts[k] && !/^\d+:\d+$/.test(cellTexts[k]) && !/^[HG]$/.test(cellTexts[k]) && !/^\d{2}\.\d{2}\.\d{4}$/.test(cellTexts[k])) {
                 opponent = cellTexts[k];
                 break;
             }
@@ -1091,14 +1048,25 @@ function parseTTLiveEntwicklungHtml(entwHtml, bilanzHtml, player) {
         });
     });
 
+    // Chronologisch sortieren (ältestes Spiel zuerst)
     const chron = rawEvents.reverse();
+
+    // Fehlende Einzelspiel-Datumsangaben sauber aus Nachbarspielen auffüllen
+    for (let i = 1; i < chron.length; i++) {
+        if (!chron[i].date && chron[i - 1].date) chron[i].date = chron[i - 1].date;
+    }
+    for (let i = chron.length - 2; i >= 0; i--) {
+        if (!chron[i].date && chron[i + 1].date) chron[i].date = chron[i + 1].date;
+    }
+
+    // Laufenden LPZ-Wert für jedes Spiel und jeden Stichtag berechnen
     let runningLpz = null;
     let currentBatchKey = '';
 
     chron.forEach(ev => {
         if (ev.isStichtag) {
-            ev.lpz = ev.lpzAfter || ev.lpzBefore || runningLpz;
-            runningLpz = ev.lpz;
+            ev.lpz = ev.lpzAfter || ev.lpzBefore || runningLpz || null;
+            if (ev.lpz) runningLpz = ev.lpz;
             return;
         }
         if (ev.lpzBefore !== null) {
@@ -1118,14 +1086,69 @@ function parseTTLiveEntwicklungHtml(entwHtml, bilanzHtml, player) {
         }
     });
 
-    const validPoints = chron.filter(p => p.lpz && p.lpz >= 500 && p.lpz <= 2500);
+    // Falls ein Stichtag ganz am Anfang der Liste noch keinen LPZ-Wert hatte, vom ersten Folgespiel übernehmen
+    const firstKnownLpz = (chron.find(e => e.lpzBefore || e.lpz) || {}).lpzBefore || (chron.find(e => e.lpz) || {}).lpz || player.lpz;
+    chron.forEach(ev => {
+        if (ev.isStichtag && !ev.lpz && firstKnownLpz) {
+            ev.lpz = firstKnownLpz;
+        }
+    });
+
+    let validPoints = chron.filter(p => p.lpz && p.lpz >= 500 && p.lpz <= 2500);
+
+    // Offizielle Q-TTR-Stichtage (11.02., 11.05., 11.08., 11.12.) automatisch ergänzen,
+    // falls TTLive sie nicht als eigene Tabellenzeile zwischen den Spielen ausgeliefert hat
+    if (validPoints.length >= 2) {
+        const existingStichtagDates = new Set(validPoints.filter(p => p.isStichtag).map(p => p.date));
+        const withSynthesized = [];
+
+        for (let i = 0; i < validPoints.length; i++) {
+            const cur = validPoints[i];
+            withSynthesized.push(cur);
+
+            if (i < validPoints.length - 1) {
+                const next = validPoints[i + 1];
+                const ts1 = parseGermanDateToTs(cur.date);
+                const ts2 = parseGermanDateToTs(next.date);
+
+                // Wenn zwei aufeinanderfolgende Spiele zeitlich aufeinanderfolgen (ts2 >= ts1)
+                if (ts1 && ts2 && ts2 > ts1 && (ts2 - ts1) < 370 * 86400000) {
+                    const y1 = new Date(ts1).getFullYear();
+                    const y2 = new Date(ts2).getFullYear();
+                    for (let y = y1; y <= y2; y++) {
+                        ['11.02.', '11.05.', '11.08.', '11.12.'].forEach(dm => {
+                            const sDate = `${dm}${y}`;
+                            const sTs = parseGermanDateToTs(sDate);
+                            if (sTs && sTs > ts1 && sTs <= ts2 && !existingStichtagDates.has(sDate)) {
+                                existingStichtagDates.add(sDate);
+                                withSynthesized.push({
+                                    isStichtag: true,
+                                    date: sDate,
+                                    lpzBefore: cur.lpz,
+                                    lpzAfter: cur.lpz,
+                                    lpz: cur.lpz,
+                                    delta: 0,
+                                    opponent: `Offizieller Q-TTR-Stichtag vom ${sDate}`,
+                                    teamOrEvent: 'Quartals-Berechnung (Q-TTR)',
+                                    score: '◆',
+                                    won: null
+                                });
+                            }
+                        });
+                    }
+                }
+            }
+        }
+        validPoints = withSynthesized;
+    }
+
     let gameCounter = 0;
     validPoints.forEach(p => {
         if (!p.isStichtag) {
             gameCounter++;
             p.gameNr = gameCounter;
         } else {
-            p.gameNr = '★';
+            p.gameNr = '◆';
         }
     });
 
@@ -1147,9 +1170,30 @@ function ttrSetRange(range) {
     if (player) ttrApplyChartPoints(player, ttrCurrentPoints);
 }
 
+// Liefert die letzten N echten Einzelspiele INKLUSIVE aller dazwischenliegenden Q-TTR-Stichtage
+function getSlicedPointsWithStichtage(allPoints, maxGames) {
+    if (!Array.isArray(allPoints) || !allPoints.length) return [];
+    let gamesSeen = 0;
+    let startIdx = 0;
+    for (let i = allPoints.length - 1; i >= 0; i--) {
+        if (!allPoints[i].isStichtag) {
+            gamesSeen++;
+            if (gamesSeen === maxGames) {
+                startIdx = i;
+                break;
+            }
+        }
+    }
+    // Falls direkt vor dem ersten Spiel noch ein Stichtag liegt, diesen mitnehmen
+    if (startIdx > 0 && allPoints[startIdx - 1] && allPoints[startIdx - 1].isStichtag) {
+        startIdx--;
+    }
+    return allPoints.slice(startIdx);
+}
+
 function ttrApplyChartPoints(player, allPoints) {
     ttrCurrentPoints = Array.isArray(allPoints) ? allPoints : [];
-    const pts = ttrCurrentPoints.slice(-ttrCurrentRange);
+    const pts = getSlicedPointsWithStichtage(ttrCurrentPoints, ttrCurrentRange);
 
     const curEl = document.getElementById('ttr-kpi-current');
     const trdEl = document.getElementById('ttr-kpi-trend');
@@ -1217,7 +1261,7 @@ function ttrRenderHistoryTable(pts) {
                 ${rev.map(p => {
                     if (p.isStichtag) {
                         return `
-                            <tr style="background:rgba(251, 191, 36, 0.14);">
+                            <tr style="background:rgba(251, 191, 36, 0.16);">
                                 <td style="border-bottom-color:rgba(255,255,255,0.08); font-weight:800; color:#fbbf24;">◆</td>
                                 <td style="border-bottom-color:rgba(255,255,255,0.08); font-weight:800; color:#fbbf24;">${domEsc(p.date)}</td>
                                 <td colspan="3" style="border-bottom-color:rgba(255,255,255,0.08); font-weight:800; color:#fbbf24;">📌 ${domEsc(p.opponent)}</td>
@@ -1247,14 +1291,23 @@ function ttrRenderHistoryTable(pts) {
     `;
 }
 
+// Formatiert Datum für schmale Displays kompakt als "DD.MM.YY" (z.B. "06.04.25")
+function formatAxisDateLabel(dateStr, compact) {
+    const raw = String(dateStr || '').trim();
+    if (!compact) return raw.slice(0, 10);
+    const m = raw.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+    if (m) return `${m[1]}.${m[2]}.${m[3].slice(2)}`;
+    return raw.slice(0, 8);
+}
+
 function ttrDrawChart(ptsInput, hoverIdx = -1) {
     const canvas = document.getElementById('ttr-chart-canvas');
     if (!canvas) return;
-    const pts = ptsInput || ttrCurrentPoints.slice(-ttrCurrentRange);
+    const pts = ptsInput || getSlicedPointsWithStichtage(ttrCurrentPoints, ttrCurrentRange);
 
     const dpr = window.devicePixelRatio || 1;
     const rect = canvas.getBoundingClientRect();
-    const W = Math.max(320, rect.width || 800);
+    const W = Math.max(280, rect.width || 800);
     const H = Math.max(240, rect.height || 340);
     canvas.width = W * dpr;
     canvas.height = H * dpr;
@@ -1265,14 +1318,15 @@ function ttrDrawChart(ptsInput, hoverIdx = -1) {
 
     if (!pts || pts.length === 0) {
         ctx.fillStyle = '#a7c4bc';
-        ctx.font = '600 14px "Plus Jakarta Sans", sans-serif';
+        ctx.font = '600 13.5px "Plus Jakarta Sans", sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('Wähle einen Spieler mit LPZ-Wert aus, um die Spiel-für-Spiel-Entwicklung zu sehen.', W / 2, H / 2);
+        ctx.fillText('Wähle einen Spieler mit LPZ-Wert aus, um die Entwicklung zu sehen.', W / 2, H / 2);
         ttrChartGeom = null;
         return;
     }
 
-    const pad = { left: 56, right: 26, top: 34, bottom: 38 };
+    const isMobile = W < 520;
+    const pad = { left: isMobile ? 46 : 56, right: isMobile ? 16 : 26, top: 34, bottom: 40 };
     const plotW = W - pad.left - pad.right;
     const plotH = H - pad.top - pad.bottom;
 
@@ -1286,8 +1340,9 @@ function ttrDrawChart(ptsInput, hoverIdx = -1) {
     const xOf = i => pts.length === 1 ? pad.left + plotW / 2 : pad.left + (i / (pts.length - 1)) * plotW;
     const yOf = v => pad.top + plotH - ((v - yMin) / Math.max(1, yMax - yMin)) * plotH;
 
+    // Horizontale Gitterlinien + Y-Achsen-LPZ
     const step = (yMax - yMin) <= 60 ? 10 : (yMax - yMin) <= 140 ? 20 : 50;
-    ctx.font = '600 11.5px "JetBrains Mono", monospace';
+    ctx.font = `600 ${isMobile ? '10.5px' : '11.5px'} "JetBrains Mono", monospace`;
     ctx.textAlign = 'right';
     for (let yv = Math.ceil(yMin / step) * step; yv <= yMax; yv += step) {
         const py = yOf(yv);
@@ -1299,29 +1354,39 @@ function ttrDrawChart(ptsInput, hoverIdx = -1) {
         ctx.stroke();
 
         ctx.fillStyle = '#a7c4bc';
-        ctx.fillText(String(yv), pad.left - 10, py + 4);
+        ctx.fillText(String(yv), pad.left - 8, py + 4);
     }
 
     const coords = pts.map((p, i) => ({ x: xOf(i), y: yOf(p.lpz), data: p, idx: i }));
     ttrChartGeom = { coords, pad, W, H, pts };
 
+    // 1. Vertikale Q-TTR-Stichtags-Linien + Label im Hintergrund zeichnen
+    let lastStichtagLabelX = -999;
     coords.forEach(c => {
         if (!c.data.isStichtag) return;
         ctx.save();
-        ctx.strokeStyle = 'rgba(251, 191, 36, 0.45)';
-        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = 'rgba(251, 191, 36, 0.55)';
+        ctx.lineWidth = 1.6;
         ctx.setLineDash([4, 4]);
         ctx.beginPath();
         ctx.moveTo(c.x, pad.top);
         ctx.lineTo(c.x, pad.top + plotH);
         ctx.stroke();
-        ctx.fillStyle = '#fbbf24';
-        ctx.font = '700 10px "Plus Jakarta Sans", sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('◆ Stichtag ' + String(c.data.date).slice(0, 6), c.x, pad.top + plotH - 6);
+
+        // Stichtags-Kurzlabel nur schreiben, wenn genug Platz zum vorherigen Stichtags-Label ist
+        if (c.x - lastStichtagLabelX >= (isMobile ? 54 : 72)) {
+            ctx.fillStyle = '#fbbf24';
+            ctx.font = `700 ${isMobile ? '9.5px' : '10.5px'} "Plus Jakarta Sans", sans-serif`;
+            const align = c.x < pad.left + 35 ? 'left' : c.x > W - pad.right - 35 ? 'right' : 'center';
+            ctx.textAlign = align;
+            const shortStichtag = String(c.data.date || '').slice(0, 6);
+            ctx.fillText(`◆ ${shortStichtag}`, c.x, pad.top + plotH - 6);
+            lastStichtagLabelX = c.x;
+        }
         ctx.restore();
     });
 
+    // 2. Flächenverlauf & LPZ-Kurve zeichnen
     if (coords.length >= 2) {
         const grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + plotH);
         grad.addColorStop(0, 'rgba(16, 185, 129, 0.40)');
@@ -1348,36 +1413,53 @@ function ttrDrawChart(ptsInput, hoverIdx = -1) {
         ctx.restore();
     }
 
+    // 3. Überlappungsfreie Datums-Achse unten zeichnen (Smartphone-optimiert!)
     ctx.fillStyle = '#a7c4bc';
-    ctx.font = '600 11px "Plus Jakarta Sans", sans-serif';
-    ctx.textAlign = 'center';
-    const labelCount = Math.min(6, coords.length);
+    ctx.font = `600 ${isMobile ? '10px' : '11px'} "Plus Jakarta Sans", sans-serif`;
+
+    // Dynamische Label-Anzahl je nach verfügbarer Breite
+    const maxLabels = plotW < 290 ? 3 : plotW < 440 ? 4 : plotW < 620 ? 5 : 6;
+    const labelCount = Math.min(maxLabels, coords.length);
+    const minPxGap = isMobile ? 62 : 84;
+    let prevLabelRightEdge = -999;
+
     for (let k = 0; k < labelCount; k++) {
         const idx = labelCount === 1 ? 0 : Math.round((k / (labelCount - 1)) * (coords.length - 1));
         const c = coords[idx];
-        ctx.fillText(String(c.data.date).slice(0, 10), c.x, H - 12);
+        const dateText = formatAxisDateLabel(c.data.date, isMobile);
+        const textW = ctx.measureText(dateText).width;
+
+        let drawX = c.x;
+        if (k === 0 && labelCount > 1) {
+            ctx.textAlign = 'left';
+            drawX = Math.max(pad.left, c.x);
+        } else if (k === labelCount - 1 && labelCount > 1) {
+            ctx.textAlign = 'right';
+            drawX = Math.min(W - pad.right, c.x);
+        } else {
+            ctx.textAlign = 'center';
+        }
+
+        const leftEdge = ctx.textAlign === 'left' ? drawX : ctx.textAlign === 'right' ? (drawX - textW) : (drawX - textW / 2);
+        const rightEdge = leftEdge + textW;
+
+        // Sicherstellen, dass das aktuelle Label weder das vorherige noch das letzte Label rechts überlappt
+        if (leftEdge < prevLabelRightEdge + 8) continue;
+        if (k < labelCount - 1 && rightEdge > (W - pad.right - minPxGap * 0.65)) continue;
+
+        ctx.fillText(dateText, drawX, H - 12);
+        prevLabelRightEdge = rightEdge;
     }
 
+    // 4. Peak-Index ermitteln
     let peakIdx = 0;
     coords.forEach((c, i) => { if (c.data.lpz >= coords[peakIdx].data.lpz) peakIdx = i; });
 
+    // 5. Zuerst alle regulären Spiel-Punkte (Grün = Sieg, Rot = Niederlage) zeichnen
     coords.forEach((c, i) => {
+        if (c.data.isStichtag) return;
         const isPeak = i === peakIdx && coords.length > 1;
         const isHover = i === hoverIdx;
-
-        if (c.data.isStichtag) {
-            const s = isHover ? 7 : 5.5;
-            ctx.save();
-            ctx.translate(c.x, c.y);
-            ctx.rotate(Math.PI / 4);
-            ctx.fillStyle = '#fbbf24';
-            ctx.strokeStyle = '#fff';
-            ctx.lineWidth = 1.8;
-            ctx.fillRect(-s / 2, -s / 2, s, s);
-            ctx.strokeRect(-s / 2, -s / 2, s, s);
-            ctx.restore();
-            return;
-        }
 
         const r = isHover ? 6.5 : isPeak ? 5.5 : (coords.length > 55 ? 3.2 : 4);
         ctx.beginPath();
@@ -1394,6 +1476,25 @@ function ttrDrawChart(ptsInput, hoverIdx = -1) {
         ctx.stroke();
     });
 
+    // 6. Danach die Q-TTR-Stichtage als markante goldene Rauten (◆) im Vordergrund zeichnen
+    coords.forEach((c, i) => {
+        if (!c.data.isStichtag) return;
+        const isHover = i === hoverIdx;
+        const s = isHover ? 9.5 : 7.5;
+        ctx.save();
+        ctx.translate(c.x, c.y);
+        ctx.rotate(Math.PI / 4);
+        ctx.shadowColor = 'rgba(251, 191, 36, 0.75)';
+        ctx.shadowBlur = 8;
+        ctx.fillStyle = '#fbbf24';
+        ctx.strokeStyle = '#07120f';
+        ctx.lineWidth = 1.8;
+        ctx.fillRect(-s / 2, -s / 2, s, s);
+        ctx.strokeRect(-s / 2, -s / 2, s, s);
+        ctx.restore();
+    });
+
+    // 7. Peak-Krone beschriften
     const pk = coords[peakIdx];
     if (pk) {
         ctx.fillStyle = '#38bdf8';
@@ -1402,10 +1503,11 @@ function ttrDrawChart(ptsInput, hoverIdx = -1) {
         ctx.fillText(`👑 Peak: ${pk.data.lpz}`, pk.x, Math.max(16, pk.y - 11));
     }
 
+    // 8. Hover-Fadenkreuz
     if (hoverIdx >= 0 && coords[hoverIdx]) {
         const hc = coords[hoverIdx];
         ctx.save();
-        ctx.strokeStyle = 'rgba(251, 191, 36, 0.8)';
+        ctx.strokeStyle = 'rgba(251, 191, 36, 0.85)';
         ctx.lineWidth = 1.5;
         ctx.setLineDash([4, 4]);
         ctx.beginPath();
@@ -1439,8 +1541,8 @@ function bindTTRChartEvents() {
             const d = pt.data;
             if (d.isStichtag) {
                 tip.innerHTML = `
-                    <div style="font-size:10.5px; color:#fbbf24; font-weight:800; text-transform:uppercase;">◆ Offizieller Stichtag · ${domEsc(d.date)}</div>
-                    <div style="font-family:'JetBrains Mono',monospace; font-size:20px; font-weight:800; color:#fbbf24; margin:4px 0;">LPZ ${d.lpz}</div>
+                    <div style="font-size:10.5px; color:#fbbf24; font-weight:800; text-transform:uppercase;">◆ Offizieller Q-TTR-Stichtag · ${domEsc(d.date)}</div>
+                    <div style="font-family:'JetBrains Mono',monospace; font-size:20px; font-weight:800; color:#fbbf24; margin:4px 0;">Q-TTR / LPZ ${d.lpz}</div>
                     <div style="font-size:11.5px; color:#fff;">${domEsc(d.opponent)}</div>
                 `;
             } else {
@@ -1462,9 +1564,11 @@ function bindTTRChartEvents() {
                 `;
             }
             tip.classList.remove('hidden');
-            const leftPos = pt.x > ttrChartGeom.W * 0.58 ? (pt.x - 235) : (pt.x + 14);
+            const maxLeft = Math.max(8, ttrChartGeom.W - 235);
+            const rawLeft = pt.x > ttrChartGeom.W * 0.55 ? (pt.x - 230) : (pt.x + 12);
+            const leftPos = Math.max(8, Math.min(maxLeft, rawLeft));
             const topPos = Math.max(10, Math.min(ttrChartGeom.H - 105, pt.y - 42));
-            tip.style.left = `${Math.max(8, leftPos)}px`;
+            tip.style.left = `${leftPos}px`;
             tip.style.top = `${topPos}px`;
         }
     };
