@@ -1,30 +1,26 @@
 // ===================================================================
 // TISCHTENNIS-HUB: TTLIVE + CLICK-TT (OBERLIGA/REGIONALLIGA),
-// LIVE-REFERENZ-ABGLEICH & KLICKBARE LIGA-GEGNER (js/tischtennis.js)
+// LIVE-REFERENZ-ABGLEICH, KLICKBARE LIGA-GEGNER & GOOGLE MAPS ROUTE (js/tischtennis.js)
 // ===================================================================
 const TTLIVE_BASE = 'https://dresden.tischtennislive.de/';
 const CLICKTT_BASE = 'https://www.mytischtennis.de';
 const TTLIVE_OVERVIEW_URL = 'https://dresden.tischtennislive.de/?L1=Public&L2=Verein&L2P=870&Page=Spielbetrieb&Sportart=96&Page2=Tabellen&Saison=2026';
 
-let ttActiveSaison = localStorage.getItem('dippe_tt_active_saison') || '2026';
-let ttCurrentSaison = ttActiveSaison;
-let ttMetaCache = null;
+let ttCurrentSaison = '2026';
 let ttTeamsList = [];
 let ttTeamDetailsCache = {};
 let activeGraupaTeamId = null;
-let inspectedSubTeam = null;
+let inspectedSubTeam = null; // { teamKey, teamName, teamUrl, isOwnGraupaTeam, sourcePortal }
 let ttHubInitialized = false;
 let ttPreloadGen = 0;
 
-function initTTSaisonSelect(maxYearParam) {
+function initTTSaisonSelect() {
     const sel = document.getElementById('tt-saison-select');
-    if (!sel) return;
-    const maxY = Math.max(2026, Number(maxYearParam || ttActiveSaison || 2026));
-    const curVal = Number(ttCurrentSaison || maxY);
+    if (!sel || sel.children.length > 0) return;
     const years = [];
-    for (let y = maxY; y >= 2009; y--) {
+    for (let y = 2026; y >= 2009; y--) {
         const nextShort = String(y + 1).slice(-2);
-        years.push(`<option value="${y}"${y === curVal ? ' selected' : ''}>${y}/${nextShort}</option>`);
+        years.push(`<option value="${y}"${y === 2026 ? ' selected' : ''}>${y}/${nextShort}</option>`);
     }
     sel.innerHTML = years.join('');
 }
@@ -84,20 +80,11 @@ function hasValidParsedDetails(d) {
     if (!d || d.error) return false;
     const hasSingles = d.singlesTable && Array.isArray(d.singlesTable.rows) && d.singlesTable.rows.length > 0;
     const hasSchedule = d.scheduleTable && Array.isArray(d.scheduleTable.rows) && d.scheduleTable.rows.length > 0;
-    if (hasSchedule) {
-        const firstCell = String(d.scheduleTable.rows[0]?.cells?.[0] || '');
-        // Verhindert, dass ein versehentlich mit dem TTLive-Parser gelesener click-TT-Spielplan als gültig durchgeht
-        if (/^[A-Za-z]{2}\./.test(firstCell)) return false;
-    }
-    if (d.sourcePortal === 'click-tt' && !hasSingles) return false;
     return Boolean(hasSingles || hasSchedule);
 }
 
 // ===================================================================
 // INTELLIGENTER VEREINSNAMEN-ABGLEICH FÜR DEN SPIELPLAN
-// Erkennt zuverlässig "SV Dresden-Mitte 1950" == "SV Dresden-Mitte",
-// "TSV Elektronik Gornsdorf" == "TSV Elekt. Gornsdorf",
-// "LTTV Leutzscher Füchse 1990" == "Leutzscher Füchse" usw.
 // ===================================================================
 function extractTeamNumberSuffix(name) {
     const m = String(name || '').trim().match(/\s+(\d+|[IVX]+)$/i);
@@ -108,8 +95,8 @@ function extractTeamNumberSuffix(name) {
 function normalizeTeamCoreTokens(name) {
     return String(name || '')
         .toLowerCase()
-        .replace(/\b(18\d\d|19\d\d|20\d\d)\b/g, ' ') // Gründungsjahre wie 1950, 1947, 1990, 2007 entfernen
-        .replace(/\b(\d+|[ivx]+)\s*$/i, ' ')         // Mannschaftsnummer am Ende separat prüfen
+        .replace(/\b(18\d\d|19\d\d|20\d\d)\b/g, ' ')
+        .replace(/\b(\d+|[ivx]+)\s*$/i, ' ')
         .replace(/\b(tsv|ttc|ttv|ttsv|lttv|sv|sg|sc|bsv|esv|post|vfl|tus|fc|ev|e\.v\.|abteilung)\b/gi, ' ')
         .replace(/[^a-zäöüß0-9\s-]/g, ' ')
         .split(/[\s-]+/)
@@ -122,7 +109,6 @@ function isSameTTTeamName(cellText, targetTeamName) {
     const b = targetTeamName.trim();
     if (a.toLowerCase() === b.toLowerCase()) return true;
 
-    // Mannschaftsnummer am Ende muss übereinstimmen (z. B. "TTC Holzhausen 2" vs "TTC Holzhausen")
     const numA = extractTeamNumberSuffix(a);
     const numB = extractTeamNumberSuffix(b);
     if (numA !== numB) return false;
@@ -135,7 +121,6 @@ function isSameTTTeamName(cellText, targetTeamName) {
     const tokB = normalizeTeamCoreTokens(b);
     if (!tokA.length || !tokB.length) return false;
 
-    // Prüfen, ob alle Kern-Anfänge des kürzeren Namens im längeren vorkommen (z.B. "elekt" in "elektronik", "gornsdorf" in "gornsdorf")
     const shorter = tokA.length <= tokB.length ? tokA : tokB;
     const longer  = tokA.length <= tokB.length ? tokB : tokA;
 
@@ -150,7 +135,7 @@ function isSameTTTeamName(cellText, targetTeamName) {
 // SCHRITT A: ABRUF AUS CLOUD (MIT LIVE-VERIFIZIERUNG)
 // ===================================================================
 async function fetchTTLiveHtmlCascade(kind, targetUrl, teamKey, forceRefresh) {
-    const cloudUrl = (CONFIG.pinnwandCloudUrl || '').trim();
+    const cloudUrl = (CONFIG.ttCloudUrl || CONFIG.pinnwandCloudUrl || '').trim();
 
     if (cloudUrl && cloudUrl.startsWith('https://script.google.com/')) {
         try {
@@ -177,7 +162,6 @@ async function fetchTTLiveHtmlCascade(kind, targetUrl, teamKey, forceRefresh) {
         } catch (e) {}
     }
 
-    // Browser-Proxy-Fallback
     const proxies = [
         {
             name: 'CodeTabs',
@@ -195,11 +179,12 @@ async function fetchTTLiveHtmlCascade(kind, targetUrl, teamKey, forceRefresh) {
         try {
             const res = await fetch(p.buildUrl(targetUrl));
             if (!res.ok) continue;
-            const html = await res.extract(res);
+            const html = await p.extract(res);
             if (isHtmlValidTTLive(html)) {
                 return {
                     html,
                     infosHtml: '',
+                    spieleHtml: '',
                     sourcePortal: targetUrl.includes('mytischtennis.de') ? 'click-tt' : 'ttlive',
                     clickTTTeams: [],
                     cachedTeams: null,
@@ -222,8 +207,8 @@ async function loadAllGraupaTeamsFromTTLive(forceRefresh) {
     if (forceRefresh) {
         ttTeamDetailsCache = {};
         try {
-            localStorage.removeItem('dippe_tt_overview_v7_' + mySaison);
-            localStorage.removeItem('dippe_tt_details_v7_' + mySaison);
+            localStorage.removeItem('dippe_tt_overview_v6_' + mySaison);
+            localStorage.removeItem('dippe_tt_details_v6_' + mySaison);
         } catch (e) {}
     }
 
@@ -234,11 +219,10 @@ async function loadAllGraupaTeamsFromTTLive(forceRefresh) {
     const directLink = document.getElementById('tt-team-direct-link');
     if (directLink) directLink.href = overviewUrl;
 
-    // 1. Sofort-Anzeige aus lokalem Cache (0 ms), ABER bei aktueller Saison immer mit ehrlichem Hinweis "Prüfe Live-Stand..."
     if (!ttTeamsList.length && !forceRefresh) {
         try {
-            const cachedOverview = localStorage.getItem('dippe_tt_overview_v7_' + mySaison);
-            const cachedDetails = localStorage.getItem('dippe_tt_details_v7_' + mySaison);
+            const cachedOverview = localStorage.getItem('dippe_tt_overview_v6_' + mySaison);
+            const cachedDetails = localStorage.getItem('dippe_tt_details_v6_' + mySaison);
             if (cachedOverview) {
                 const parsedCache = JSON.parse(cachedOverview);
                 if (Array.isArray(parsedCache) && parsedCache.length) {
@@ -282,8 +266,6 @@ async function loadAllGraupaTeamsFromTTLive(forceRefresh) {
 
         let parsedTeams = parseTTLiveOverviewHtml(result.html);
 
-        // Falls click-TT-Teams (wie 1. Damen in der Oberliga Mitte) vom Backend mitgeliefert wurden:
-        // Ersetze einen evtl. unvollständigen TTLive-Eintrag der 1. Damen oder füge das click-TT-Team prominent ein!
         if (Array.isArray(result.clickTTTeams) && result.clickTTTeams.length > 0) {
             result.clickTTTeams.forEach(ct => {
                 const parsedClickTeam = parseClickTTOverviewTeam(ct);
@@ -292,7 +274,6 @@ async function loadAllGraupaTeamsFromTTLive(forceRefresh) {
                     if (existingIdx !== -1) {
                         parsedTeams[existingIdx] = parsedClickTeam;
                     } else {
-                        // Direkt nach den Herren-Top-Teams oder vor Nachwuchs einsortieren
                         parsedTeams.push(parsedClickTeam);
                     }
                 }
@@ -302,12 +283,10 @@ async function loadAllGraupaTeamsFromTTLive(forceRefresh) {
         if (!parsedTeams.length) throw new Error('Keine Graupa-Tabellen im HTML gefunden');
 
         ttTeamsList = parsedTeams;
-        try { localStorage.setItem('dippe_tt_overview_v7_' + mySaison, JSON.stringify(ttTeamsList)); } catch (e) {}
+        try { localStorage.setItem('dippe_tt_overview_v6_' + mySaison, JSON.stringify(ttTeamsList)); } catch (e) {}
 
         if (result.cachedTeams && typeof result.cachedTeams === 'object') {
             Object.keys(result.cachedTeams).forEach(tKey => {
-                // WICHTIG: click-TT-Teams niemals mit dem TTLive-Parser vorparsen!
-                if (tKey.includes('clicktt')) return;
                 const rawHtml = result.cachedTeams[tKey];
                 if (isHtmlValidTTLive(rawHtml)) {
                     const parsedDet = parseTTLiveTeamDetailHtml(rawHtml);
@@ -321,7 +300,7 @@ async function loadAllGraupaTeamsFromTTLive(forceRefresh) {
                     }
                 }
             });
-            try { localStorage.setItem('dippe_tt_details_v9_' + mySaison, JSON.stringify(ttTeamDetailsCache)); } catch (e) {}
+            try { localStorage.setItem('dippe_tt_details_v6_' + mySaison, JSON.stringify(ttTeamDetailsCache)); } catch (e) {}
         }
 
         if (!activeGraupaTeamId || !ttTeamsList.some(t => t.id === activeGraupaTeamId)) {
@@ -338,7 +317,6 @@ async function loadAllGraupaTeamsFromTTLive(forceRefresh) {
         }
 
         renderGraupaTeamTabs();
-        // Bei aktueller Saison das aktiv ausgewählte Team im Hintergrund frisch verifizieren!
         await selectGraupaTeamTab(activeGraupaTeamId, isCurrentSeason ? true : forceRefresh);
 
         preloadRemainingSeasonTeams(mySaison);
@@ -366,14 +344,14 @@ async function preloadRemainingSeasonTeams(saisonForRun) {
             const result = await fetchTTLiveHtmlCascade('team', team.teamUrl, team.teamKey, false);
             if (gen !== ttPreloadGen || ttCurrentSaison !== saisonForRun) return;
             const details = team.sourcePortal === 'click-tt'
-                ? parseClickTTTeamDetailHtml(result.html, result.infosHtml, result.spieleHtml, team)
+                ? parseClickTTTeamDetailHtml(result.html, result.infosHtml, team, result.spieleHtml)
                 : parseTTLiveTeamDetailHtml(result.html);
             if (hasValidParsedDetails(details)) {
                 details._verifiedLive = result.verifiedLive;
                 details._fetchedAt = result.fetchedAt;
                 ttTeamDetailsCache[team.id] = details;
                 ttTeamDetailsCache[team.teamKey] = details;
-                try { localStorage.setItem('dippe_tt_details_v7_' + saisonForRun, JSON.stringify(ttTeamDetailsCache)); } catch (e) {}
+                try { localStorage.setItem('dippe_tt_details_v6_' + saisonForRun, JSON.stringify(ttTeamDetailsCache)); } catch (e) {}
                 if (activeGraupaTeamId === team.id && (!inspectedSubTeam || inspectedSubTeam.isOwnGraupaTeam)) {
                     renderGraupaTeamLayout(team, details, false);
                 }
@@ -384,14 +362,12 @@ async function preloadRemainingSeasonTeams(saisonForRun) {
 
 // ===================================================================
 // PARSER FÜR CLICK-TT (OBERLIGA MITTE / REGIONALLIGA SÜD)
-// Wandelt myTischtennis.de/click-tt Tabellen nahtlos in unser Design um!
 // ===================================================================
 function parseClickTTOverviewTeam(ctObj) {
     if (!ctObj || !ctObj.tabelleHtml) return null;
     const doc = sanitizeTTLiveDom(ctObj.tabelleHtml);
     const tables = Array.from(doc.querySelectorAll('table'));
 
-    // Suche die Liga-Tabelle, in der "TSV Graupa" vorkommt
     const leagueTbl = tables.find(t => /TSV\s+Graupa/i.test(t.textContent) && /Mannschaft|Begegnungen|Spiele|Punkte/i.test(t.textContent));
     if (!leagueTbl) return null;
 
@@ -406,13 +382,11 @@ function parseClickTTOverviewTeam(ctObj) {
         if (nonEmpty.length < 4) return;
 
         if (!standingsHeaders.length && r.querySelector('th') && /Mannschaft/i.test(nonEmpty.join(' '))) {
-            // Erste leere Auf-/Abstiegs-Spalte von click-TT überspringen, falls nötig
             standingsHeaders = texts.filter(x => x !== '');
             return;
         }
         if (/Mannschaft/i.test(nonEmpty[0]) || /Mannschaft/i.test(nonEmpty[1] || '')) return;
 
-        // Link zur jeweiligen Mannschaft in click-TT (/mannschaft/<id>/...)
         const anchor = Array.from(r.querySelectorAll('a')).find(a => /\/mannschaft\/\d+\//i.test(a.getAttribute('href') || ''));
         let rowTeamUrl = anchor ? resolveTTLiveHref(anchor.getAttribute('href'), 'mytischtennis.de') : '';
         if (rowTeamUrl && !/spielerbilanzen/i.test(rowTeamUrl)) {
@@ -422,7 +396,6 @@ function parseClickTTOverviewTeam(ctObj) {
         const rowTeamKey = mIdMatch ? ('team_clicktt_' + mIdMatch[1]) : '';
         const rowTeamName = anchor ? anchor.textContent.replace(/\s+/g, ' ').trim() : '';
 
-        // Bereinige führende Tendenz-Pfeile von click-TT, sodass Spalte 0 der Rang ("1", "2"...) und Spalte 1 der Mannschaftsname ist
         let cleanCells = nonEmpty.slice();
         const rankIdx = cleanCells.findIndex(c => /^\d+\.?$/.test(c));
         if (rankIdx > 0 && rankIdx <= 2) {
@@ -465,12 +438,7 @@ function parseClickTTOverviewTeam(ctObj) {
     };
 }
 
-function parseClickTTTeamDetailHtml(bilanzenHtml, infosHtml, spieleHtml, targetTeam) {
-    if (targetTeam === undefined && typeof spieleHtml === 'object') {
-        targetTeam = spieleHtml;
-        spieleHtml = '';
-    }
-
+function parseClickTTTeamDetailHtml(bilanzenHtml, infosHtml, baseTeam, spieleHtml) {
     const doc = sanitizeTTLiveDom(bilanzenHtml || '');
     const tables = Array.from(doc.querySelectorAll('table')).filter(t => !t.querySelector('table'));
 
@@ -486,229 +454,140 @@ function parseClickTTTeamDetailHtml(bilanzenHtml, infosHtml, spieleHtml, targetT
         if (rows.length < 2) return;
         const headText = rows.slice(0, 2).map(r => r.textContent.replace(/\s+/g, ' ').trim()).join(' | ');
 
-        // 1. EINZEL- & DOPPEL-BILANZEN TRENNEN
-        if (!singlesTable && (/Rang|Pos|Einsätze/i.test(headText) && /Name|Spieler|Gesamt|PK1/i.test(headText))) {
-            const hCells = getCleanRowCells(rows[0]);
-            const singleRows = [];
-            const doubleRows = [];
-            let mode = 'singles';
+        if (!singlesTable && (/Rang|Pos/i.test(headText) && /Name|Spieler/i.test(headText) && /Gesamt|Bilanz|Einsätze/i.test(headText))) {
+            const sRows = [];
+            const dRows = [];
+            let inDoublesSection = false;
 
             rows.slice(1).forEach(r => {
                 const cells = getCleanRowCells(r);
-                if (cells.length < 2) return;
-                const firstCell = (cells[0] || '').trim();
-
-                if (/^Einzel$/i.test(firstCell)) {
-                    singleRows.push({
-                        cells: ['Gesamt', 'Einzel gesamt', '', '', '', cells[1] || ''],
-                        isTotal: true
-                    });
-                    mode = 'doubles';
+                if (!cells.length) return;
+                if (cells.length === 1 && /Doppel/i.test(cells[0])) {
+                    inDoublesSection = true;
                     return;
                 }
-
-                if (/^Doppel$/i.test(firstCell)) {
-                    doubleRows.push({
-                        cells: ['Gesamt', '', '', cells[1] || ''],
-                        isTotal: true
-                    });
-                    mode = 'done';
+                if (cells.length === 1 && /Einzel/i.test(cells[0])) {
+                    inDoublesSection = false;
                     return;
                 }
+                if (cells.length < 3) return;
+                const isTot = cells.some(c => /^Gesamt|^Einzel|^Doppel$/i.test(c));
 
-                if (/^Gesamt$/i.test(firstCell)) {
-                    if (mode === 'singles') {
-                        singleRows.push({
-                            cells: ['Gesamt', '', '', '', '', cells[cells.length - 1] || ''],
-                            isTotal: true
-                        });
-                    }
-                    return;
-                }
-
-                if (firstCell.includes(' / ') || mode === 'doubles') {
-                    mode = 'doubles';
-                    const pairParts = firstCell.split(/\s*\/\s*/);
-                    const p1 = pairParts[0] || firstCell;
-                    const p2 = pairParts[1] || '';
-                    const einsaetze = cells[1] || '';
-                    const bilanz = cells[cells.length - 1] || '';
-                    doubleRows.push({
-                        cells: [p1, p2, einsaetze, bilanz],
-                        isTotal: false
+                if (inDoublesSection) {
+                    const pairStr = cells[1] || cells[0] || '';
+                    const parts = pairStr.split(/\s*[/–-]\s*/);
+                    dRows.push({
+                        cells: isTot
+                            ? ['Gesamt', '', cells[cells.length - 2] || '', cells[cells.length - 1] || '']
+                            : [parts[0] || pairStr, parts[1] || '', cells[cells.length - 2] || '', cells[cells.length - 1] || ''],
+                        isTotal: isTot
                     });
-                    return;
-                }
-
-                if (mode === 'singles') {
-                    singleRows.push({
-                        cells: [
-                            cells[0] || '',
-                            cells[1] || '',
-                            cells[2] || '',
-                            cells[3] || '',
-                            cells[4] || '',
-                            cells[5] || cells[cells.length - 1] || ''
-                        ],
-                        isTotal: false
-                    });
+                } else {
+                    sRows.push({ cells, isTotal: isTot });
                 }
             });
 
-            if (singleRows.length) {
-                singlesTable = {
-                    headers: hCells.length === 6 ? hCells : ['Rang', 'Spieler', 'Einsätze', 'PK1', 'PK2', 'Gesamt'],
-                    rows: singleRows
-                };
+            if (sRows.length) {
+                const hCells = getCleanRowCells(rows[0]);
+                singlesTable = { headers: hCells.length === sRows[0].cells.length ? hCells : ['Rang', 'Spieler', 'Einsätze', 'PK1', 'PK2', 'Gesamt'], rows: sRows };
             }
-            if (doubleRows.length) {
-                doublesTable = {
-                    headers: ['Spielerin 1', 'Spielerin 2', 'Einsätze', 'Bilanz'],
-                    rows: doubleRows
-                };
+            if (dRows.length && !doublesTable) {
+                doublesTable = { headers: ['Spieler 1', 'Spieler 2', 'Einsätze', 'Bilanz'], rows: dRows };
             }
             return;
         }
 
-        // 2. Spielplan-Tabelle direkt auf der Seite
-        if (!scheduleTable && (/Heim/i.test(headText) || /Gast/i.test(headText) || /Begegnung/i.test(headText)) && /\d{2}\.\d{2}\.\d{2,4}/.test(tbl.textContent)) {
-            scheduleTable = extractClickTTScheduleFromTable(rows);
+        if (!doublesTable && /Doppel/i.test(headText + ' ' + findSectionHeadingAbove(tbl)) && !/Heim|Gast/i.test(headText)) {
+            const dRows = [];
+            rows.slice(1).forEach(r => {
+                const cells = getCleanRowCells(r);
+                if (cells.length >= 2) {
+                    const isTot = cells.some(c => /^Gesamt/i.test(c));
+                    const pairStr = cells[0] || '';
+                    const parts = pairStr.split(/\s*[/–-]\s*/);
+                    if (parts.length >= 2 && !isTot) {
+                        dRows.push({ cells: [parts[0].trim(), parts[1].trim(), cells[1] || '', cells[2] || ''], isTotal: false });
+                    } else {
+                        dRows.push({ cells, isTotal: isTot });
+                    }
+                }
+            });
+            if (dRows.length) {
+                doublesTable = { headers: ['Spieler 1', 'Spieler 2', 'Einsätze', 'Bilanz'], rows: dRows };
+            }
+            return;
         }
     });
 
-    // 3. SPIELPLAN AUS spieleHtml EXTRAHIEREN
-    if (!scheduleTable && spieleHtml) {
-        if (/TischtennisLive/i.test(spieleHtml) && !/mytischtennis/i.test(spieleHtml)) {
-            const parsedFallback = parseTTLiveTeamDetailHtml(spieleHtml);
-            if (parsedFallback && parsedFallback.scheduleTable) {
-                scheduleTable = parsedFallback.scheduleTable;
-            }
-            if (parsedFallback && parsedFallback.ballInfo && !ballInfo) {
-                ballInfo = parsedFallback.ballInfo;
-            }
-        } else {
-            const sDoc = sanitizeTTLiveDom(spieleHtml);
-            const sTables = Array.from(sDoc.querySelectorAll('table')).filter(t => !t.querySelector('table'));
-            for (const stbl of sTables) {
-                const sRows = getDirectRows(stbl);
-                if (sRows.length >= 2 && /\d{2}\.\d{2}\.\d{2,4}/.test(stbl.textContent)) {
-                    const extr = extractClickTTScheduleFromTable(sRows);
-                    if (extr && extr.rows.length) {
-                        scheduleTable = extr;
-                        break;
+    const parseScheduleFromDoc = (sDoc) => {
+        const sTables = Array.from(sDoc.querySelectorAll('table')).filter(t => !t.querySelector('table'));
+        for (const tbl of sTables) {
+            const rows = getDirectRows(tbl);
+            if (rows.length < 2) continue;
+            const headText = rows.slice(0, 2).map(r => r.textContent.replace(/\s+/g, ' ').trim()).join(' | ');
+            if ((/Heim/i.test(headText) || /Gast/i.test(headText)) && /Datum|Tag|Zeit|Termin/i.test(headText)) {
+                const schRows = [];
+                rows.slice(1).forEach(r => {
+                    const cells = getCleanRowCells(r);
+                    if (cells.length < 4) return;
+                    const dateIdx = cells.findIndex(c => /\d{2}\.\d{2}\.\d{2,4}/.test(c));
+                    const timeIdx = cells.findIndex((c, i) => i >= dateIdx && /^\d{1,2}:\d{2}/.test(c));
+                    if (dateIdx !== -1 && timeIdx !== -1) {
+                        const dMatch = cells[dateIdx].match(/([A-Za-z]{2})\.?\s*(\d{2}\.\d{2}\.\d{2,4})/);
+                        const tag = dMatch ? dMatch[1] : (dateIdx > 0 ? cells[dateIdx - 1] : '');
+                        const dat = dMatch ? dMatch[2] : cells[dateIdx];
+                        const zeit = cells[timeIdx];
+                        const heim = cells[timeIdx + 1] || '';
+                        const gast = cells[timeIdx + 2] || '';
+                        const erg  = cells.slice(timeIdx + 3).join(' ').trim() || '–';
+                        schRows.push({ cells: ['–', tag, dat, zeit, heim, gast, erg], isTotal: false });
+                    } else {
+                        schRows.push({ cells: cells.slice(0, 7), isTotal: false });
                     }
+                });
+                if (schRows.length) {
+                    return {
+                        headers: ['Nr.', 'Tag', 'Datum', 'Zeit', 'Heimmannschaft', 'Gastmannschaft', 'Ergebnis'],
+                        rows: schRows
+                    };
                 }
             }
         }
+        return null;
+    };
+
+    if (spieleHtml) {
+        scheduleTable = parseScheduleFromDoc(sanitizeTTLiveDom(spieleHtml));
+    }
+    if (!scheduleTable) {
+        scheduleTable = parseScheduleFromDoc(doc);
     }
 
-    // 4. INFOS-SEITE PARSEN (100% frei von <script>-JSON-Fragmenten!)
     if (infosHtml) {
-        // A) Zuerst prüfen, ob Next.js JSON-Felder ("team_contact" / "playing_locations" / "gyms") im HTML stecken:
-        const tcBlock = infosHtml.match(/"team_contact"\s*:\s*\{([\s\S]{1,800}?)\}/i);
-        if (tcBlock) {
-            const tc = tcBlock[1];
-            const fn = (tc.match(/"first_?name"\s*:\s*"([^"]+)"/i) || [])[1] || '';
-            const ln = (tc.match(/"last_?name"\s*:\s*"([^"]+)"/i) || [])[1] || '';
-            const fullN = (tc.match(/"name"\s*:\s*"([^"]+)"/i) || [])[1] || '';
-            if (fn || ln) captainInfo.name = `${fn} ${ln}`.trim();
-            else if (fullN) captainInfo.name = fullN.trim();
-
-            const em = (tc.match(/"email[^"]*"\s*:\s*"([^"]+@[^"]+)"/i) || [])[1];
-            if (em) captainInfo.email = em.trim();
-
-            const ph = (tc.match(/"(?:phone|mobile|tel)[^"]*"\s*:\s*"([^"]+)"/i) || [])[1];
-            if (ph) captainInfo.phone = ph.trim();
-        }
-
-        // B) Jetzt im völlig skriptfreien DOM nach "Mannschaftskontakt" und "Spiellokal 1" suchen:
-        const iDoc = sanitizeTTLiveDom(infosHtml); // sanitizeTTLiveDom entfernt alle <script>-Tags!
-        iDoc.querySelectorAll('footer, nav, header, [class*="footer"], [id*="footer"]').forEach(el => el.remove());
-
-        // Hilfsfunktion: fügt vor jedem Block/Zeilen-Tag einen echten Zeilenumbruch ein, bevor Tags entfernt werden
-        const htmlToCleanLines = (el) => {
-            if (!el) return [];
-            const clone = el.cloneNode(true);
-            clone.querySelectorAll('br, p, div, li, tr, h1, h2, h3, h4, h5, h6, dt, dd').forEach(node => {
-                node.insertAdjacentText('beforebegin', '\n');
-                node.insertAdjacentText('afterend', '\n');
-            });
-            return (clone.textContent || '')
-                .split(/\r?\n/)
-                .map(s => s.replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim())
-                .filter(s => s.length >= 2 && !/^\{"|^","|":null|"\$undefined"/i.test(s));
-        };
-
-        const allLines = htmlToCleanLines(iDoc.body);
-
-        // Mannschaftskontakt im sichtbaren Text finden
-        const mkIdx = allLines.findIndex(l => /^Mannschaftskontakt$/i.test(l));
-        if (mkIdx !== -1) {
-            const mkSlice = [];
-            for (let k = mkIdx + 1; k < Math.min(allLines.length, mkIdx + 12); k++) {
-                if (/^Spiellokal|^Mannschafts|^Verein|^Ligen/i.test(allLines[k])) break;
-                mkSlice.push(allLines[k]);
-            }
-            if (!captainInfo.name && mkSlice[0]) {
-                captainInfo.name = mkSlice[0];
-            }
-            const mailLine = mkSlice.find(l => /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/.test(l));
-            if (mailLine && !captainInfo.email) {
-                captainInfo.email = (mailLine.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/) || [mailLine])[0];
-            }
-            const phoneLine = mkSlice.find(l => /(?:0\d{2,4}|\+49)[\s\/\-]*\d[\d\s\/\-]{4,}/.test(l));
-            if (phoneLine && !captainInfo.phone) {
-                captainInfo.phone = (phoneLine.match(/(?:0\d{2,4}|\+49)[\s\/\-]*\d[\d\s\/\-]{4,}/) || [phoneLine])[0].trim();
+        const iDoc = sanitizeTTLiveDom(infosHtml);
+        const iText = iDoc.body ? iDoc.body.textContent.replace(/\s+/g, ' ') : '';
+        const mfMatch = iText.match(/(?:Mannschaftskontakt|Mannschaftsführer|Kontakt)\s*[:\-]?\s*([A-ZÄÖÜa-zäöüß\s\-]{4,35}?)(?=\s+Tel|\s+Mobil|\s+E-Mail|\s+Spiellokal|$)/i);
+        if (mfMatch) captainInfo.name = mfMatch[1].trim();
+        const telMatch = iText.match(/(?:Mobil|Telefon|Tel\.?)\s*[:\-]?\s*([+0-9\s/\-]{7,22})/i);
+        if (telMatch) captainInfo.phone = telMatch[1].trim();
+        const lokalMatch = iText.match(/Spiellokal\s*1?\s*[:\-]?\s*([^,]{4,45}),\s*([^,]{4,40}),\s*([0-9]{5}\s+[A-ZÄÖÜa-zäöüß\s\-]+)/i);
+        if (lokalMatch) {
+            venueInfo.name = lokalMatch[1].trim();
+            venueInfo.street = lokalMatch[2].trim();
+            venueInfo.city = lokalMatch[3].trim();
+        } else {
+            const lokalSimple = iText.match(/Spiellokal\s*1?\s*[:\-]?\s*([^,]{4,45}),\s*([0-9]{5}\s+[A-ZÄÖÜa-zäöüß\s\-]+)/i);
+            if (lokalSimple) {
+                venueInfo.name = lokalSimple[1].trim();
+                venueInfo.city = lokalSimple[2].trim();
             }
         }
-
-        // Spiellokal 1 im sichtbaren Text finden
-        const slIdx = allLines.findIndex(l => /^Spiellokal\s*1?$/i.test(l));
-        if (slIdx !== -1) {
-            const slSlice = [];
-            for (let k = slIdx + 1; k < Math.min(allLines.length, slIdx + 12); k++) {
-                if (/^Spiellokal\s*[23]|^Mannschaftskontakt|^Verein/i.test(allLines[k])) break;
-                if (!/^www\.|^http/i.test(allLines[k])) slSlice.push(allLines[k]);
-            }
-            const plzIdx = slSlice.findIndex(l => /^\d{5}\s+[A-ZÄÖÜa-zäöüß]/.test(l));
-            if (plzIdx !== -1) {
-                venueInfo.city = slSlice[plzIdx];
-                if (plzIdx >= 2) {
-                    venueInfo.name = slSlice[0];
-                    venueInfo.street = slSlice[plzIdx - 1];
-                } else if (plzIdx === 1) {
-                    venueInfo.name = slSlice[0];
-                }
-            } else if (slSlice.length >= 2) {
-                venueInfo.name = slSlice[0];
-                venueInfo.street = slSlice[1];
-                if (slSlice[2] && /^\d{5}/.test(slSlice[2])) venueInfo.city = slSlice[2];
-            }
-            const vPhone = slSlice.find(l => /(?:0\d{2,4}|\+49)[\s\/\-]*\d[\d\s\/\-]{4,}/.test(l));
-            if (vPhone) {
-                venueInfo.phone = (vPhone.match(/(?:0\d{2,4}|\+49)[\s\/\-]*\d[\d\s\/\-]{4,}/) || [vPhone])[0].trim();
-            }
-        }
-    }
-
-    // WICHTIG: Fallback auf Peter Kraetsch & Grundschule Graupa NUR DANN,
-    // wenn es sich wirklich um unsere eigene Mannschaft (TSV Graupa) handelt!
-    const teamLabel = (targetTeam && (targetTeam.teamName || targetTeam.fullTeamName)) || '';
-    const isActuallyGraupa = Boolean(targetTeam && targetTeam.isOwnGraupaTeam) || /TSV\s+Graupa/i.test(teamLabel);
-
-    if (isActuallyGraupa) {
-        if (!captainInfo.name) captainInfo.name = 'Peter Kraetsch';
-        if (!captainInfo.email) captainInfo.email = 'kraetschipe@web.de';
-        if (!captainInfo.phone) captainInfo.phone = '0172 / 9 34 37 67';
-        if (!venueInfo.name) venueInfo.name = 'Turnhalle der Grundschule Graupa';
-        if (!venueInfo.street) venueInfo.street = 'Badstraße 3';
-        if (!venueInfo.city) venueInfo.city = '01796 Pirna';
-        if (!venueInfo.phone) venueInfo.phone = '03501 / 54 82 03';
-        if (!ballInfo) ballInfo = 'Victas VP40+***';
+        const ballM = iText.match(/Ball(?:marke)?\s*[:\-]?\s*([A-Za-z0-9\s\-+*]{3,30})/i);
+        if (ballM) ballInfo = ballM[1].trim();
     }
 
     return {
-        headerTitle: teamLabel || 'Oberliga Mitte',
+        headerTitle: baseTeam ? `${baseTeam.fullTeamName}, ${baseTeam.tabName}` : 'Oberliga Mitte',
         sourcePortal: 'click-tt',
         ballInfo,
         captainInfo,
@@ -716,78 +595,6 @@ function parseClickTTTeamDetailHtml(bilanzenHtml, infosHtml, spieleHtml, targetT
         singlesTable,
         doublesTable,
         scheduleTable
-    };
-}
-
-function extractClickTTScheduleFromTable(rows) {
-    const schRows = [];
-    let matchCounter = 0;
-
-    rows.slice(1).forEach(r => {
-        const cells = getCleanRowCells(r);
-        if (cells.length < 3) return;
-        const dateIdx = cells.findIndex(c => /\d{2}\.\d{2}\.\d{2,4}/.test(c));
-        if (dateIdx === -1) return;
-
-        const timeIdx = cells.findIndex((c, i) => i >= dateIdx && /^\d{1,2}:\d{2}/.test(c));
-        if (timeIdx === -1) return;
-
-        matchCounter++;
-        let tag = '';
-        let dat = cells[dateIdx];
-        // Trennt "Sa., 26.09.2026" oder "Sa. 26.09.2026" sauber in Tag ("Sa") und Datum ("26.09.26")!
-        const combinedDateM = dat.match(/^([A-Za-zÄÖÜäöüß]{2})[.,]*\s*(\d{2}\.\d{2}\.\d{2,4})$/);
-        if (combinedDateM) {
-            tag = combinedDateM[1];
-            dat = combinedDateM[2];
-        } else if (dateIdx > 0 && /^[A-Za-zÄÖÜäöüß]{2}[.,]*$/.test(cells[dateIdx - 1])) {
-            tag = cells[dateIdx - 1].replace(/[.,]+$/, '');
-        }
-        dat = dat.replace(/^[A-Za-zÄÖÜäöüß]{2}[.,]*\s*/, '').replace(/^[.,\s]+/, '').replace(/\.20(\d{2})$/, '.$1');
-
-        const zeit = cells[timeIdx].replace(/\s+/g, ' ').trim();
-
-        let cursor = timeIdx + 1;
-        while (cursor < cells.length && (/^\(?\d\)?$|^H\d$/i.test(cells[cursor]) || !cells[cursor])) {
-            cursor++;
-        }
-
-        let heim = cells[cursor] || '';
-        let gast = cells[cursor + 1] || '';
-        let tail = cells.slice(cursor + 2).join(' ').trim();
-
-        const scoreInGast = gast.match(/^(.*?)\s+(\d{1,2}:\d{1,2})(?:\s+.*)?$/);
-        let erg = '';
-        if (scoreInGast) {
-            gast = scoreInGast[1].trim();
-            erg  = scoreInGast[2].trim();
-        } else {
-            const scoreInTail = tail.match(/(\d{1,2}:\d{1,2})/);
-            if (scoreInTail) {
-                erg = scoreInTail[1];
-            } else if (/Vorbericht|verlegt|abgesagt|kampflos/i.test(tail)) {
-                erg = (tail.match(/Vorbericht|verlegt|abgesagt|kampflos/i) || ['Vorbericht'])[0];
-            } else {
-                erg = tail || 'Vorbericht';
-            }
-        }
-
-        const strayScore = erg.match(/^(.*?)\s+(\d{1,2}:\d{1,2})$/);
-        if (strayScore && !gast) {
-            gast = strayScore[1].trim();
-            erg = strayScore[2].trim();
-        }
-
-        schRows.push({
-            cells: [String(matchCounter), tag || 'Sa', dat, zeit, heim, gast, erg],
-            isTotal: false
-        });
-    });
-
-    if (!schRows.length) return null;
-    return {
-        headers: ['Nr.', 'Tag', 'Datum', 'Zeit', 'Heimmannschaft', 'Gastmannschaft', 'Ergebnis'],
-        rows: schRows
     };
 }
 
@@ -1041,10 +848,9 @@ async function selectLeagueTableRowTeam(rowIdx, forceRefresh = false) {
     const row = team.standingsRows[rowIdx];
     if (!row.rowTeamUrl || !row.rowTeamKey) return;
 
-    // Eigenes Team zuverlässig erkennen (auch wenn click-TT "team_clicktt_3080673" nutzt)
-    const isOwn = (row.rowTeamKey === team.teamKey) || Boolean(row.isGraupa && /TSV\s+Graupa/i.test(row.rowTeamName || ''));
+    const isOwn = (row.rowTeamKey === team.teamKey);
     inspectedSubTeam = {
-        teamKey: isOwn ? team.teamKey : row.rowTeamKey,
+        teamKey: row.rowTeamKey,
         teamName: row.rowTeamName || row.cells[1] || 'Mannschaft',
         teamUrl: row.rowTeamUrl,
         isOwnGraupaTeam: isOwn,
@@ -1063,29 +869,14 @@ async function loadAndRenderInspectedTeam(baseGraupaTeam, subTeam, forceRefresh)
     }
 
     const tKey = subTeam.teamKey;
-    const isCurrentSeason = Number(ttCurrentSaison) >= Number(typeof ttActiveSaison !== 'undefined' ? ttActiveSaison : 2026);
+    const isCurrentSeason = Number(ttCurrentSaison) >= 2026;
     const cached = !forceRefresh ? (ttTeamDetailsCache[tKey] || (subTeam.isOwnGraupaTeam ? ttTeamDetailsCache[baseGraupaTeam.id] : null)) : null;
     const isValidCache = hasValidParsedDetails(cached);
-    const portalLabel = subTeam.sourcePortal === 'click-tt' ? 'click-TT' : 'TTLive';
 
-    // Fall 1: Daten sind bereits in dieser Sitzung live verifiziert (oder abgeschlossene Archiv-Saison)
+    renderGraupaTeamLayout(baseGraupaTeam, isValidCache ? cached : null, !isValidCache);
+
     if (isValidCache && (!isCurrentSeason || cached._verifiedLiveInSession)) {
-        renderGraupaTeamLayout(baseGraupaTeam, cached, false, false);
-        const timeStr = new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-        if (isCurrentSeason) {
-            setTTLiveSyncBadge(`✅ Live abgeglichen (${portalLabel} · ${subTeam.teamName} · ${timeStr} Uhr)`, '#d1fae5', '#065f46', '#6ee7b7');
-        }
         return;
-    }
-
-    // Fall 2: Es muss im Hintergrund geladen oder gegen TTLive/click-TT verifiziert werden ->
-    // Status-Badge SOFORT ehrlich auf Gelb ("Lade / Prüfe...") setzen!
-    if (isValidCache) {
-        setTTLiveSyncBadge(`⚡ Cache angezeigt · 🔄 Prüfe aktuellen Live-Stand für ${subTeam.teamName} (${portalLabel}) …`, '#fef3c7', '#92400e', '#fcd34d');
-        renderGraupaTeamLayout(baseGraupaTeam, cached, false, true);
-    } else {
-        setTTLiveSyncBadge(`⏳ Lade Bilanzen, Spielplan & Halle für ${subTeam.teamName} von ${portalLabel} …`, '#fef3c7', '#92400e', '#fcd34d');
-        renderGraupaTeamLayout(baseGraupaTeam, null, true, true);
     }
 
     const mySaison = ttCurrentSaison;
@@ -1094,7 +885,7 @@ async function loadAndRenderInspectedTeam(baseGraupaTeam, subTeam, forceRefresh)
         if (ttCurrentSaison !== mySaison) return;
 
         const details = subTeam.sourcePortal === 'click-tt'
-            ? parseClickTTTeamDetailHtml(result.html, result.infosHtml, result.spieleHtml, subTeam)
+            ? parseClickTTTeamDetailHtml(result.html, result.infosHtml, baseGraupaTeam, result.spieleHtml)
             : parseTTLiveTeamDetailHtml(result.html);
 
         if (hasValidParsedDetails(details)) {
@@ -1105,27 +896,20 @@ async function loadAndRenderInspectedTeam(baseGraupaTeam, subTeam, forceRefresh)
 
             ttTeamDetailsCache[tKey] = details;
             if (subTeam.isOwnGraupaTeam) ttTeamDetailsCache[baseGraupaTeam.id] = details;
-            try { localStorage.setItem('dippe_tt_details_v9_' + mySaison, JSON.stringify(ttTeamDetailsCache)); } catch (e) {}
+            try { localStorage.setItem('dippe_tt_details_v6_' + mySaison, JSON.stringify(ttTeamDetailsCache)); } catch (e) {}
 
             if (activeGraupaTeamId === baseGraupaTeam.id && inspectedSubTeam && inspectedSubTeam.teamKey === tKey) {
-                renderGraupaTeamLayout(baseGraupaTeam, details, false, false);
-                const timeStr = new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-                setTTLiveSyncBadge(`✅ Live abgeglichen mit ${portalLabel} · ${subTeam.teamName} (${timeStr} Uhr)`, '#d1fae5', '#065f46', '#6ee7b7');
+                renderGraupaTeamLayout(baseGraupaTeam, details, false);
             }
         }
     } catch (err) {
         console.warn('Fehler beim Laden der Mannschaftsdetails:', err);
-        if (activeGraupaTeamId === baseGraupaTeam.id && inspectedSubTeam && inspectedSubTeam.teamKey === tKey) {
-            if (!isValidCache) {
-                renderGraupaTeamLayout(baseGraupaTeam, { error: String(err.message || err) }, false, false);
-                setTTLiveSyncBadge(`⚠️ Abruf für ${subTeam.teamName} fehlgeschlagen`, '#fee2e2', '#b91c1c', '#fca5a5');
-            } else {
-                renderGraupaTeamLayout(baseGraupaTeam, cached, false, false);
-                setTTLiveSyncBadge(`☁️ Gespeicherter Stand für ${subTeam.teamName}`, '#fef3c7', '#92400e', '#fcd34d');
-            }
+        if (!isValidCache && activeGraupaTeamId === baseGraupaTeam.id && inspectedSubTeam && inspectedSubTeam.teamKey === tKey) {
+            renderGraupaTeamLayout(baseGraupaTeam, { error: String(err.message || err) }, false);
         }
     }
 }
+
 function parseTTLiveTeamDetailHtml(htmlString) {
     const doc = sanitizeTTLiveDom(htmlString);
     const fullText = doc.body ? doc.body.textContent : '';
@@ -1377,9 +1161,9 @@ function extractCleanDataTable(rows, headerIdx, kind) {
 }
 
 // ===================================================================
-// SCHRITT C: ZWEISPALTIGES RENDERING (MIT QUELLEN-TRANSPARENZ & GEGNER-HIGHLIGHT)
+// SCHRITT C: ZWEISPALTIGES RENDERING INKL. GOOGLE MAPS ROUTENPLANUNG
 // ===================================================================
-function renderGraupaTeamLayout(team, details, isLoadingDetails, isRevalidating = false) {
+function renderGraupaTeamLayout(team, details, isLoadingDetails) {
     const cont = document.getElementById('tt-team-content');
     if (!cont) return;
 
@@ -1446,12 +1230,6 @@ function renderGraupaTeamLayout(team, details, isLoadingDetails, isRevalidating 
             </button>
         </div>
     ` : '';
-    const revalidatingBannerHtml = (isRevalidating && !isLoadingDetails) ? `
-        <div style="background:#fffbeb; border:1.5px solid #f59e0b; color:#92400e; border-radius:12px; padding:8px 14px; display:flex; align-items:center; gap:8px; font-size:12.5px; font-weight:700;">
-            <span>🔄</span>
-            <span>Prüfe im Hintergrund aktuellen Live-Stand für <b>${domEsc(curSub.teamName)}</b> bei ${portalName} …</span>
-        </div>
-    ` : '';
 
     let scheduleHtml = '';
     if (isLoadingDetails) {
@@ -1472,7 +1250,6 @@ function renderGraupaTeamLayout(team, details, isLoadingDetails, isRevalidating 
                                 return `<tr>${r.cells.map((c, idx) => {
                                     const isTeamCol = idx === 4 || idx === 5;
                                     const isGraupaCell = isTeamCol && /TSV\s+Graupa/i.test(c);
-                                    // Smart-Match: Erkennt auch verkürzte Vereinsnamen wie "SV Dresden-Mitte" für "SV Dresden-Mitte 1950"!
                                     const isInspectedCell = isTeamCol && !isGraupaCell && !curSub.isOwnGraupaTeam && isSameTTTeamName(c, curSub.teamName);
                                     const highlightStyle = isGraupaCell
                                         ? 'font-weight:800;color:var(--emerald-dark);'
@@ -1540,19 +1317,31 @@ function renderGraupaTeamLayout(team, details, isLoadingDetails, isRevalidating 
 
         const cap = details.captainInfo || {};
         const ven = details.venueInfo || {};
-        const isGraupaVenue = curSub.isOwnGraupaTeam || /Graupa/i.test((ven.name || '') + ' ' + (ven.city || ''));
+        const isGraupaVenue = curSub.isOwnGraupaTeam || /Graupa|Copitz|Diesterweg/i.test((ven.name || '') + ' ' + (ven.city || ''));
         const fullAddress = [ven.street || (isGraupaVenue ? 'Badstr. 3' : ''), ven.city || (isGraupaVenue ? '01796 Pirna OT Graupa' : '')].filter(Boolean).join(', ');
         const cleanBall = (details.ballInfo || '')
             .replace(/^Die\s+Mannschaft\s+verwendet\s+Bälle\s+der\s+Marke\s*/i, '')
             .trim();
 
+        const isCopitzVenue = /Diesterweg|Roßmäßler|Rossmaessler|Copitz/i.test((ven.name || '') + ' ' + fullAddress);
+        const osmEmbedUrl = isCopitzVenue
+            ? 'https://www.openstreetmap.org/export/embed.html?bbox=13.9180%2C50.9635%2C13.9320%2C50.9705&layer=mapnik&marker=50.9670%2C13.9250'
+            : 'https://www.openstreetmap.org/export/embed.html?bbox=13.9165%2C50.9995%2C13.9285%2C51.0055&layer=mapnik&marker=51.0025%2C13.9225';
+        const routeDest = encodeURIComponent(((ven.name ? ven.name + ', ' : '') + fullAddress).trim());
+
         const mapSectionHtml = isGraupaVenue
             ? `<iframe title="Karte Spielstätte"
-                       src="https://www.openstreetmap.org/export/embed.html?bbox=13.9165%2C50.9995%2C13.9285%2C51.0055&layer=mapnik&marker=51.0025%2C13.9225"
-                       style="width:100%; height:115px; border:1px solid var(--border-sand); border-radius:10px;"></iframe>`
-            : `<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((ven.name ? ven.name + ', ' : '') + fullAddress)}"
-                  target="_blank" rel="noopener" class="btn btn-emerald" style="width:100%; padding:10px; font-size:12.5px; margin-top:6px;">
-                  🗺️ Route zur Gast-Halle in Google Maps öffnen ↗
+                       src="${osmEmbedUrl}"
+                       style="width:100%; height:115px; border:1px solid var(--border-sand); border-radius:10px;"></iframe>
+               <a href="https://www.google.com/maps/dir/?api=1&destination=${routeDest}"
+                  target="_blank" rel="noopener" class="btn btn-emerald"
+                  style="width:100%; justify-content:center; padding:8px 12px; font-size:12.5px; margin-top:8px; text-decoration:none; display:inline-flex; align-items:center; gap:6px;">
+                  <span>🧭 Route in Google Maps planen</span><span>↗</span>
+               </a>`
+            : `<a href="https://www.google.com/maps/dir/?api=1&destination=${routeDest}"
+                  target="_blank" rel="noopener" class="btn btn-emerald"
+                  style="width:100%; justify-content:center; padding:10px; font-size:12.5px; margin-top:6px; text-decoration:none; display:inline-flex; align-items:center; gap:6px;">
+                  <span>🧭 Route zur Gast-Halle in Google Maps planen</span><span>↗</span>
                </a>`;
 
         rightCol = `
@@ -1578,9 +1367,8 @@ function renderGraupaTeamLayout(team, details, isLoadingDetails, isRevalidating 
                         <span class="person-role">📋 Metadaten · ${domEsc(curSub.teamName)}</span>
                         <div style="font-size:10.5px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.04em; margin-top:6px;">Mannschaftsführer</div>
                         <h5 style="font-size:17px; font-weight:800; margin:1px 0 8px; color:var(--text-dark);">${domEsc(cap.name || ('Siehe ' + portalName))}</h5>
-                        <div style="font-size:12.5px; color:#475569; line-height:1.75;">
-                            ${cap.phone ? `<div>📞 <b>Telefon:</b> <a href="tel:${domEsc(cap.phone.replace(/[^0-9+]/g, ''))}" style="color:var(--emerald-dark); font-weight:700; text-decoration:none;">${domEsc(cap.phone)}</a></div>` : ''}
-                            ${cap.email ? `<div>✉️ <b>E-Mail:</b> <a href="mailto:${domEsc(cap.email)}" style="color:var(--emerald-dark); font-weight:700; text-decoration:none;">${domEsc(cap.email)}</a></div>` : ''}
+                        <div style="font-size:12.5px; color:#475569; line-height:1.65;">
+                            ${cap.phone ? `<div>📞 <b>Telefon:</b> <a href="tel:${domEsc(cap.phone.replace(/\s+/g, ''))}" style="color:var(--emerald-dark); font-weight:700; text-decoration:none;">${domEsc(cap.phone)}</a></div>` : ''}
                             ${cap.deputy ? `<div>👥 <b>Vertretung:</b> ${domEsc(cap.deputy)}</div>` : ''}
                             ${ven.matchDay ? `<div>📅 <b>Heimspieltag:</b> ${domEsc(ven.matchDay)}</div>` : ''}
                             ${cleanBall ? `<div>🟡 <b>Spielball:</b> ${domEsc(cleanBall)}</div>` : ''}
@@ -1610,167 +1398,4 @@ function renderGraupaTeamLayout(team, details, isLoadingDetails, isRevalidating 
 
 window.addEventListener('DOMContentLoaded', () => {
     initTTHubIfNeeded();
-});
-
-// ===================================================================
-// ZENTRALE SAISON-STEUERUNG (1-KLICK-SAISONWECHSEL IM BROWSER)
-// ===================================================================
-async function syncActiveSeasonFromBackend() {
-    const cloudUrl = (CONFIG.pinnwandCloudUrl || '').trim();
-    if (!cloudUrl || !cloudUrl.startsWith('https://script.google.com/')) return;
-    try {
-        const res = await fetch(`${cloudUrl}?kind=tt_meta&t=${Date.now()}`, { redirect: 'follow' });
-        if (!res.ok) return;
-        const j = await res.json();
-        if (j && j.ok && j.meta && j.meta.activeSaison) {
-            const serverActive = String(j.meta.activeSaison);
-            const prevActive = ttActiveSaison;
-            ttActiveSaison = serverActive;
-            ttMetaCache = j.meta;
-            try { localStorage.setItem('dippe_tt_active_saison', serverActive); } catch (e) {}
-            initTTSaisonSelect(serverActive);
-            if (prevActive !== serverActive && ttCurrentSaison === prevActive) {
-                changeTTSaison(serverActive);
-            }
-        }
-    } catch (e) {}
-}
-
-async function openTTSeasonAdminModal() {
-    const panel = document.getElementById('tt-season-admin-panel');
-    if (!panel) return;
-    if (!panel.classList.contains('hidden')) {
-        panel.classList.add('hidden');
-        return;
-    }
-    let pwd = sessionStorage.getItem('dippe_admin_pwd');
-    if (!pwd) {
-        pwd = (typeof askPasswordModal === 'function')
-            ? await askPasswordModal('⚙️ Saison-Admin', 'Bitte Admin-Passwort eingeben:')
-            : prompt('Bitte Admin-Passwort eingeben:');
-        if (!pwd) return;
-        const cloudUrl = (CONFIG.pinnwandCloudUrl || '').trim();
-        try {
-            const r = await fetch(`${cloudUrl}?kind=auth&type=admin&password=${encodeURIComponent(pwd)}`);
-            const j = await r.json();
-            if (!j || !j.ok) { alert('Falsches Admin-Passwort!'); return; }
-            sessionStorage.setItem('dippe_admin_pwd', pwd);
-        } catch (e) {
-            alert('Verbindungsfehler bei der Passwortprüfung.');
-            return;
-        }
-    }
-
-    await syncActiveSeasonFromBackend();
-    document.getElementById('tt-admin-new-saison').value = ttActiveSaison;
-    const ctList = (ttMetaCache && ttMetaCache.clickTTLeagues && ttMetaCache.clickTTLeagues[ttCurrentSaison]) || [];
-    const firstCt = ctList[0] || {};
-    document.getElementById('tt-admin-ct-tabname').value  = firstCt.tabName || '1. Damen';
-    document.getElementById('tt-admin-ct-league').value   = firstCt.league || 'DTTB Oberliga Mitte Damen';
-    document.getElementById('tt-admin-ct-tabelle').value  = firstCt.tabelleUrl || '';
-    document.getElementById('tt-admin-ct-bilanzen').value = firstCt.bilanzenUrl || '';
-
-    panel.classList.remove('hidden');
-}
-
-async function ttAdminSaveActiveSeason() {
-    const pwd = sessionStorage.getItem('dippe_admin_pwd');
-    const newS = String(document.getElementById('tt-admin-new-saison')?.value || '').trim();
-    const freezePrev = Boolean(document.getElementById('tt-admin-freeze-prev')?.checked);
-    if (!newS || !/^\d{4}$/.test(newS)) {
-        alert('Bitte eine vierstellige Jahreszahl eingeben (z. B. 2027).');
-        return;
-    }
-    if (!confirm(`Saisonwechsel wirklich durchführen?\n\n• Neue aktive Hauptsaison: ${newS}/${String(+newS + 1).slice(-2)}\n• Alle Saisons vor ${newS} werden als abgeschlossenes Archiv behandelt.`)) {
-        return;
-    }
-
-    const cloudUrl = (CONFIG.pinnwandCloudUrl || '').trim();
-    try {
-        const res = await fetch(cloudUrl, {
-            method: 'POST', redirect: 'follow',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify({
-                kind: 'tt_meta_action',
-                action: 'set_active_season',
-                password: pwd,
-                newSaison: newS,
-                freezePrevious: freezePrev
-            })
-        });
-        const j = await res.json();
-        if (j && j.ok && j.meta) {
-            ttMetaCache = j.meta;
-            ttActiveSaison = String(j.meta.activeSaison);
-            localStorage.setItem('dippe_tt_active_saison', ttActiveSaison);
-            initTTSaisonSelect(ttActiveSaison);
-            document.getElementById('tt-season-admin-panel')?.classList.add('hidden');
-            changeTTSaison(ttActiveSaison);
-            if (typeof showQuickToast === 'function') {
-                showQuickToast(`✅ Aktive Saison auf ${ttActiveSaison}/${String(+ttActiveSaison + 1).slice(-2)} umgestellt!`);
-            }
-        } else {
-            alert(j?.error || 'Fehler beim Speichern.');
-        }
-    } catch (e) {
-        alert('Netzwerkfehler beim Saisonwechsel.');
-    }
-}
-
-async function ttAdminSaveClickTTTeam(clearAll) {
-    const pwd = sessionStorage.getItem('dippe_admin_pwd');
-    const targetS = String(document.getElementById('tt-admin-new-saison')?.value || ttCurrentSaison).trim();
-    let leagues = [];
-
-    if (!clearAll) {
-        const tabName = (document.getElementById('tt-admin-ct-tabname')?.value || '1. Damen').trim();
-        const league  = (document.getElementById('tt-admin-ct-league')?.value || 'DTTB Oberliga').trim();
-        const tabUrl  = (document.getElementById('tt-admin-ct-tabelle')?.value || '').trim();
-        const bilUrl  = (document.getElementById('tt-admin-ct-bilanzen')?.value || '').trim();
-        if (!tabUrl || !bilUrl) {
-            alert('Bitte sowohl die Tabellen-URL als auch die Spielerbilanzen-URL aus click-TT eintragen.');
-            return;
-        }
-        const infosUrl = bilUrl.replace(/\/spielerbilanzen(\/gesamt)?.*$/i, '/infos');
-        const keySlug = 'team_clicktt_' + targetS + '_' + tabName.toLowerCase().replace(/[^a-z0-9]/g, '');
-        leagues = [{
-            id: keySlug,
-            teamKey: keySlug,
-            tabName: tabName,
-            fullTeamName: 'TSV Graupa',
-            league: league,
-            tabelleUrl: tabUrl,
-            bilanzenUrl: bilUrl,
-            infosUrl: infosUrl
-        }];
-    }
-
-    const cloudUrl = (CONFIG.pinnwandCloudUrl || '').trim();
-    try {
-        const res = await fetch(cloudUrl, {
-            method: 'POST', redirect: 'follow',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify({
-                kind: 'tt_meta_action',
-                action: 'save_clicktt_leagues',
-                password: pwd,
-                saison: targetS,
-                leagues: leagues
-            })
-        });
-        const j = await res.json();
-        if (j && j.ok && j.meta) {
-            ttMetaCache = j.meta;
-            loadAllGraupaTeamsFromTTLive(true);
-            if (typeof showQuickToast === 'function') {
-                showQuickToast(clearAll ? '🗑️ click-TT-Zuordnung entfernt' : '✅ click-TT-Team gespeichert!');
-            }
-        }
-    } catch (e) {
-        alert('Fehler beim Speichern der click-TT-Daten.');
-    }
-}
-
-window.addEventListener('DOMContentLoaded', () => {
-    syncActiveSeasonFromBackend();
 });
