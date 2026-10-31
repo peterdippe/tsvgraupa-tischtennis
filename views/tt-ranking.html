@@ -1,20 +1,11 @@
 <!-- ===============================================================
-     SPORT-ECKE: TT-RANKING, TRAININGS-CHALLENGE & 9 ANALYSE-CHARTS
+     TSV GRAUPA TISCHTENNIS: TT-RANKING, TRAININGS-CHALLENGE & ANALYSE
      =============================================================== -->
 <section id="page-tt-ranking" class="page-section">
     <div class="section-header">
         <div>
-            <span class="eyebrow">Sport-Ecke · Trainings-Challenge, LivePZ-Rangliste & Spiel-Analyse</span>
+            <span class="eyebrow">TSV Graupa · Trainings-Challenge, LivePZ-Rangliste & Spiel-Analyse</span>
             <h2 style="font-size:32px; font-weight:800;">📈 TT-Ranking</h2>
-        </div>
-        <div style="display:flex; flex-wrap:wrap; gap:8px;">
-            <button class="btn btn-sand" onclick="switchPage('tischtennis')">🏓 Tischtennis</button>
-            <button class="btn btn-emerald" onclick="switchPage('tt-ranking')">📈 TT-Ranking</button>
-            <button class="btn btn-sand" onclick="switchPage('turnierplaner')">🏆 Turnierplaner</button>
-            <button class="btn btn-sand" onclick="switchPage('zaehlboard')">🔢 Digitales Zählboard</button>
-            <button class="btn btn-sand" onclick="switchPage('radfahren')">🚴 Fahrradfahren</button>
-            <button class="btn btn-sand" onclick="switchPage('wandern')">🥾 Wanderungen</button>
-            <button class="btn btn-sand" onclick="switchPage('kicker')">⚽ Kickerabend</button>
         </div>
     </div>
 
@@ -32,7 +23,7 @@
                 </h3>
             </div>
 
-            <!-- Konsistente Steuerleiste inkl. Admin-Button (analog zum Turnierplaner) -->
+            <!-- Steuerleiste inkl. Admin-Button -->
             <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
                 <div id="ttr-admin-controls" class="hidden" style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
                     <button class="btn btn-emerald" style="padding:7px 13px; font-size:12px;" onclick="ttrAdminStartSession()">
@@ -119,14 +110,9 @@
                         <span class="eyebrow-dark">Start bei 0 Pkt. · LPZ-gewichtetes Elo · 3:0-Bonus</span>
                         <h3 style="font-size:21px; font-weight:800;">🏆 Trainings-Challenge Rangliste</h3>
                     </div>
-                    <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
-                        <select id="ttr-session-history-select" class="form-input" style="width:auto; padding:5px 10px; font-size:12px; font-weight:700;" onchange="ttrSelectSessionView(this.value)">
-                            <option value="active">Aktuelle Session</option>
-                        </select>
-                        <button id="ttr-delete-session-btn" class="btn btn-dark hidden" style="padding:5px 10px; font-size:11.5px; background:#b91c1c; color:#fff;" onclick="ttrAdminDeleteSession()" title="Ausgewählte Challenge-Session unwiderruflich löschen">
-                            🗑️ Session löschen
-                        </button>
-                    </div>
+                    <select id="ttr-session-history-select" class="form-input" style="width:auto; padding:5px 10px; font-size:12px; font-weight:700;" onchange="ttrSelectSessionView(this.value)">
+                        <option value="active">Aktuelle Session</option>
+                    </select>
                 </div>
 
                 <!-- Champion-Podium (Erscheint automatisch, wenn Session ausgewertet/beendet wurde) -->
@@ -163,7 +149,7 @@
             </div>
         </div>
 
-        <!-- RECHTE SPALTE: KOMPAKTE VEREINS-LPZ-RANGLISTE (SCHMAL & SCHNELL) -->
+        <!-- RECHTE SPALTE: KOMPAKTE VEREINS-LPZ-RANGLISTE -->
         <div class="sand-card" style="display:flex; flex-direction:column; justify-content:space-between;">
             <div>
                 <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px; margin-bottom:10px;">
@@ -234,7 +220,7 @@
             </div>
 
             <div style="display:flex; flex-wrap:wrap; align-items:center; gap:8px;">
-                <!-- Umschalter: LPZ-Kurve vs. 9 Analyse-Donuts (Konsistentes Dark-Emerald-Design) -->
+                <!-- Umschalter: LPZ-Kurve vs. 9 Analyse-Donuts -->
                 <button id="ttr-tab-btn-curve" class="btn btn-emerald" style="padding:8px 14px; font-size:12.5px;" onclick="ttrSwitchCockpitTab('curve')">
                     📈 LPZ-Entwicklung (100 Spiele)
                 </button>
@@ -311,7 +297,7 @@
             </details>
         </div>
 
-        <!-- TAB 2: DIE 9 HIGH-END SPIEL-ANALYSE-DONUTS (NACHGEBAUT & MODERNISIERT) -->
+        <!-- TAB 2: DIE 9 HIGH-END SPIEL-ANALYSE-DONUTS -->
         <div id="ttr-cockpit-panel-analyse" class="hidden" style="background:rgba(7, 18, 15, 0.85); border:1px solid var(--border-green); border-radius:18px; padding:18px 20px;">
             <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:10px; margin-bottom:16px;">
                 <div>
